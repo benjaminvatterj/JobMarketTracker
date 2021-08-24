@@ -1,0 +1,24 @@
+# Ignore data files
+*.dta
+*.csv
+*.h5
+*.pkl
+*.zip
+*.tar.gz
+# Ignore temporary tex files
+*.aux
+*.dvi
+*.synctex.gz
+# Ignore compiled pdf
+*.pdf
+# Ignore logs
+*.out
+*.err
+*.log
+# Ignore figures
+*.png
+*.gif
+*.jpeg
+# Ignore _pycache__
+__pycache__/
+
