@@ -52,12 +52,11 @@ if __name__ == "__main__":
     """), formatter_class=argparse.RawTextHelpFormatter)
 
     available_actions = {
-        'update': update_files,
         'gui': launch_gui,
     }
 
-    parser.add_argument("action", type=str, choices=available_actions.keys(),
-                        help="action to execute")
+    parser.add_argument("--action", type=str, choices=available_actions.keys(),
+                        help="action to execute", default='gui')
     parser.add_argument("--debug", action="store_true",
                         help="Debug log level")
 
