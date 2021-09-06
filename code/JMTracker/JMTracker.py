@@ -1,4 +1,5 @@
 import os
+from textwrap import dedent
 import pandas as pd
 import xlrd
 import webbrowser
@@ -53,9 +54,10 @@ class Tracker():
         """
         layout = [
             [sg.Text("Update postings:"), sg.Button("update", key="-UPDATE POSTINGS-")],
-            [sg.Text("Review new loaded postings:"), sg.Button("new", key="-NEW-")],
-            [sg.Text("View deadlines:"), sg.Button("view", key="-DEADLINES-")],
+            [sg.Text("Review new postings:"), sg.Button("new", key="-NEW-")],
             [sg.Text("Manage updates:"), sg.Button("view", key="-UPDATES-")],
+            [sg.Text("View deadlines:"), sg.Button("view", key="-DEADLINES-")],
+            [sg.Text("View help:"), sg.Button("view", key="-HELP-")],
             [sg.Button("Close")]
         ]
         window = sg.Window('Job Market Tracker', layout, resizable=True)
@@ -81,6 +83,53 @@ class Tracker():
                 window.close()
                 self.review_updates()
                 return self.main_gui()
+            elif event == "-HELP-":
+                help_text = dedent(
+                    """
+                    The process for managing applications is as follows:
+
+                    1) Go to \"update postings\" and download the AEA and EJM files
+                    to your local computer. For the AEA download the native XML
+                    and for the EJM download in CVS. This system does not provide
+                    any type of filtering, so if you want to exclude rows, you should
+                    do so manually in the XML/CSV files. Once you're ready, set the
+                    location of each file in the finder, and click the update.
+                    The system will review each posting in each file and evaluate
+                    whether there are new postings or updates to existings ones.
+                    New postings will be added to your local new-posting list,
+                    while updates will be added to your pending update review list.
+
+                    2) To manage new postings, go to \"Review new postings\"
+                    This will show each posting, one by one, allowing you to classify
+                    each as interested, maybe interested, or ignore. You can also see
+                    the details of postings or go directly to the website.
+
+                    3) To manage updates, go to \"Manage updates\". The system
+                    will list all new collected updates and will allow you to
+                    accept or reject each update for each posting.
+
+                    4) To see your application deadline go to \"View deadlines\"
+                    there you will find all the postings you marked as
+                    interested or maybes. Note that some employers do a very
+                    bad job of marking the correct deadline in AEA and EJM,
+                    and some even don't write any. Often the correct deadline
+                    is in the full text. So it is recommended for you to review
+                    each deadline (particularly those that show up as very far
+                    in the future). The system allows you to modify the deadline
+                    of each interested posting manually at this stage.
+
+                    If you have any questions or found a bug, please submit an issues
+                    to the github page. If there's a new version and you would
+                    like to update, you just need to copy the files found
+                    in the storage/ folder and move them to your new copy
+                    of the new version. If you would like to start a new
+                    application process from scratch, just delete those same
+                    files from your storage folder. If you would like to contribute
+                    please visit the github page.
+                    """
+                )
+                sg.popup_scrolled(help_text, title='help', location=window_location,
+                                  size=(65, 35), font='Helvetica 12')
             else:
                 logging.info(f"Got unkown event {event}")
                 return
