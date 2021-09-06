@@ -42,6 +42,10 @@ class Tracker():
                          "This tool will store its internal data in \n"
                          f"{self._postings_url}.")
             self._first_run = True
+
+        self._pending_updates_url = os.path.join(
+            self._storage_dir, 'updates_pending_review.pkl'
+        )
         return
 
     def main_gui(self):
@@ -51,9 +55,10 @@ class Tracker():
             [sg.Text("Update postings:"), sg.Button("update", key="-UPDATE POSTINGS-")],
             [sg.Text("Review new loaded postings:"), sg.Button("new", key="-NEW-")],
             [sg.Text("View deadlines:"), sg.Button("view", key="-DEADLINES-")],
+            [sg.Text("Manage updates:"), sg.Button("view", key="-UPDATES-")],
             [sg.Button("Close")]
         ]
-        window = sg.Window('Job Market Tracker', layout, size=(600, 150))
+        window = sg.Window('Job Market Tracker', layout, resizable=True)
         while True:
             event, values = window.read()
             window_location = window.CurrentLocation(True)
@@ -72,6 +77,13 @@ class Tracker():
                 window.close()
                 self.view_deadlines(window_location)
                 return self.main_gui()
+            elif event == "-UPDATES-":
+                window.close()
+                self.review_updates()
+                return self.main_gui()
+            else:
+                logging.info(f"Got unkown event {event}")
+                return
 
         return
 
@@ -264,22 +276,36 @@ class Tracker():
         total_updated = 0
         for col in check_cols:
             sel = (df[col] != df[col + '_new']) & (df[col + '_new'].notna())
+            if sel.any() and col == 'deadline':
+                test = pd.to_datetime(df[col]) - pd.to_datetime(df[col + '_new'])
+                test = test.dt.days != 0
+                sel = sel & test
             total_updated = max(total_updated, sel.sum())
             df.loc[sel, 'updated'] = True
             df.loc[sel, 'update_notes'] += f'new {col},'
-            df.loc[sel, col] = df.loc[sel, col + '_new']
-            df.drop(col + '_new', axis=1, inplace=True)
 
         if total_updated > 0:
             logging.info(f"Found {total_updated} updated in AEA postings!")
+            sg.popup(f"Found {total_updated} updates for AEA listings. \n"
+                     "You can review them in the `review updates' menu.")
 
-            # Remove the updated once, and append
-            sel = (postings['origin'] == 'AEA') & (
-                postings['origin_id'].isin(df['origin_id'].unique())
-            )
-            postings = postings.loc[~sel, :].copy()
-            postings = postings.append(df, ignore_index=True)
-            postings.to_pickle(self._postings_url)
+            # Store the updates separately for review
+            df = df.loc[df['updated'], :].drop('updated', axis=1).copy()
+            # Check if we need to merge with any past updates
+            if not os.path.isfile(self._pending_updates_url):
+                df.to_pickle(self._pending_updates_url)
+                return True, ''
+
+            updates = pd.read_pickle(self._pending_updates_url)
+            # In this case we just want to update whatever we have included
+            updates['version'] = 0
+            df['version'] = 1
+            updates = updates.append(df, ignore_index=True)
+            updates.sort_values('version', inplace=True)
+            updates.drop_duplicates(['origin', 'origin_id', 'version'],
+                                    inplace=True, keep='last')
+            updates.drop('version', axis=1, inplace=True)
+            updates.to_pickle(self._pending_updates_url)
         else:
             logging.info("No new postings in AEA")
 
@@ -378,7 +404,7 @@ class Tracker():
             logging.info("All EJM postings were new")
             return True, ''
 
-        # Check the overalpp to see if there's anything new
+        # Check the overlapp to see if there's anything new
         check_cols = ['url', 'title', 'section', 'division', 'deadline',
                       'institution']
         previous = postings.loc[postings['origin'] == 'EJM', :].copy()
@@ -390,22 +416,38 @@ class Tracker():
         total_updated = 0
         for col in check_cols:
             sel = (df[col] != df[col + '_new']) & (df[col + '_new'].notna())
+            if sel.any() and col == 'deadline':
+                test = pd.to_datetime(df[col]) - pd.to_datetime(df[col + '_new'])
+                test = test.dt.days != 0
+                sel = sel & test
             total_updated = max(total_updated, sel.sum())
             df.loc[sel, 'updated'] = True
             df.loc[sel, 'update_notes'] += f'new {col},'
-            df.loc[sel, col] = df.loc[sel, col + '_new']
-            df.drop(col + '_new', axis=1, inplace=True)
 
         if total_updated > 0:
             logging.info(f"Found {total_updated} updated in EJM postings!")
+            sg.popup(f"Found {total_updated} updates for EJM listings. \n"
+                     "You can review them in the `review updates' menu.")
 
-            # Remove the updated once, and append
-            sel = (postings['origin'] == 'EJM') & (
-                postings['origin_id'].isin(df['origin_id'].unique())
-            )
-            postings = postings.loc[~sel, :].copy()
-            postings = postings.append(df, ignore_index=True)
-            postings.to_pickle(self._postings_url)
+            # Store the updates separately for review
+            df = df.loc[df['updated'], :].drop('updated', axis=1).copy()
+            # Check if we need to merge with any past updates
+            if not os.path.isfile(self._pending_updates_url):
+                df.to_pickle(self._pending_updates_url)
+                return True, ''
+
+            updates = pd.read_pickle(self._pending_updates_url)
+            # In this case we just want to update whatever we have included
+            updates['version'] = 0
+            df['version'] = 1
+            updates = updates.append(df, ignore_index=True)
+            updates.sort_values('version', inplace=True)
+            updates.drop_duplicates(['origin', 'origin_id', 'version'],
+                                    inplace=True, keep='last')
+            updates.drop('version', axis=1, inplace=True)
+            updates.to_pickle(self._pending_updates_url)
+
+
         else:
             logging.info("No new postings in EJM")
 
@@ -426,7 +468,15 @@ class Tracker():
         status_updates = []
         font = 'Helvetica 12'
 
+
+        num_postings = postings.shape[0]
+        if num_postings == 0:
+            sg.popup("No new postings to display")
+            return
+
+        current_posting = 0
         for ix, row in postings.iterrows():
+            current_posting += 1
             # unpack
             section = row['section']
             institution = row['institution']
@@ -457,7 +507,8 @@ class Tracker():
             ]
 
             # size = (600, 400)
-            window = sg.Window('New posting', layout, location=window_location)
+            window = sg.Window(f'New posting ({current_posting} / {num_postings})',
+                               layout, location=window_location)
             while True:
                 event, values = window.read()
                 # update the window location
@@ -514,6 +565,8 @@ class Tracker():
 
         # Prepare data
         all_postings = pd.read_pickle(self._postings_url)
+        posting_cols = ['institution', 'title', 'status']
+
 
         def filter_postings(all_postings, maybe=False, expired=True, applied=False):
             status = ['interested']
@@ -589,7 +642,9 @@ class Tracker():
                 [sg.Text("Upcoming deadlines:", font='Helvetica 12 underline')],
                 [sg.Table(values=deadline_values, enable_events=True,
                           headings=columns, key='-DATE LIST-',
-                          auto_size_columns=True,
+                          auto_size_columns=True, expand_x=True,
+                          def_col_width=50,
+                          num_rows=20,
                           expand_y=True, row_colors=row_colors)],
                 [sg.CB("show maybes", key='-MAYBE-', enable_events=True,
                        default=maybe),
@@ -604,9 +659,12 @@ class Tracker():
             results_columns = [
                 [sg.Text(applications_text, font="Helvetica 12 underline")],
                 [sg.Table(values=application_values, enable_events=True,
-                          headings=['Institution', 'Title'],
+                          headings=['Institution', 'Title', 'Status'],
                           auto_size_columns=True,
-                          expand_y=True, key='-APPLICATIONS-')],
+                          def_col_width=80,
+                          num_rows=20,
+                          expand_y=True, key='-APPLICATIONS-',
+                          expand_x=True)],
                 [sg.Button("Clear", key="-CLEAR-"), sg.Button("Show All", key="-ALL-")]
             ]
             header = [[sg.Text("Select date from left, click on item on the right"
@@ -616,19 +674,21 @@ class Tracker():
             layout = [[header], [sg.HSeparator()], [
                 sg.Column(dates_list_columns),
                 sg.VSeparator(),
-                sg.Column(results_columns)
+                sg.Column(results_columns),
             ], [sg.HSeparator()], [footer]]
             return layout
 
 
+        size = (None, None)
         postings = filter_postings(all_postings)
         tbl, current_deadlines = deadlines_from_postings(postings)
-        posting_values = [['', '']]
+        posting_values = [['', '', '']]
         selected_postings = None
         selected_row = None
         selected_date = None
         layout = gen_layout(tbl, posting_values, selected_row, selected_date)
-        window = sg.Window("Deadlines", layout, location=window_location)
+        window = sg.Window("Deadlines", layout, location=window_location,
+                           size=size, resizable=True)
         layout_kwargs = {
             'maybe': False,
             'expired': True,
@@ -652,28 +712,31 @@ class Tracker():
                     sel = pd.to_datetime(postings['deadline']) == date
                 selected_postings = postings.loc[sel, :]
                 if selected_postings.shape[0] == 0:
-                    posting_values = [['', '']]
+                    posting_values = [['', '', '']]
                 else:
                     posting_values = (
-                        selected_postings.loc[:, ['institution', 'title']]
+                        selected_postings.loc[:, posting_cols]
                         .values.tolist()
                     )
                 selected_row = row
                 selected_date = date
-                new_layout = gen_layout(tbl, posting_values, row, date, **layout_kwargs)
+                new_layout = gen_layout(tbl, posting_values, row, date,
+                                        **layout_kwargs)
                 window.close()
-                window = sg.Window("Deadlines", new_layout, location=window_location)
+                window = sg.Window("Deadlines", new_layout, location=window_location,
+                                   size=size, resizable=True)
             elif event == "-CLEAR-":
-                posting_values = [['', '']]
+                posting_values = [['', '', '']]
                 selected_date = None
                 selected_row = None
                 selected_postings = None
                 new_layout = gen_layout(tbl, posting_values, **layout_kwargs)
                 window.close()
-                window = sg.Window("Deadlines", new_layout, location=window_location)
+                window = sg.Window("Deadlines", new_layout, location=window_location,
+                                   size=size, resizable=True)
             elif event == "-ALL-":
                 posting_values = (
-                    postings.loc[:, ['institution', 'title']].values.tolist()
+                    postings.loc[:, posting_cols].values.tolist()
                 )
                 selected_row = None
                 selected_date = "any date"
@@ -681,7 +744,8 @@ class Tracker():
                                         selected_date,
                                         **layout_kwargs)
                 window.close()
-                window = sg.Window("Deadlines", new_layout, location=window_location)
+                window = sg.Window("Deadlines", new_layout, location=window_location,
+                                   size=size, resizable=True)
             elif event in ['-MAYBE-', '-EXPIRED-', '-APPLIED-']:
                 layout_kwargs['maybe'] = values['-MAYBE-']
                 layout_kwargs['expired'] = values['-EXPIRED-']
@@ -693,7 +757,8 @@ class Tracker():
                     **layout_kwargs
                 )
                 window.close()
-                window = sg.Window("Deadlines", new_layout, location=window_location)
+                window = sg.Window("Deadlines", new_layout, location=window_location,
+                                   size=size, resizable=True)
             elif event == "-APPLICATIONS-":
                 if selected_postings is None:
                     sg.popup_error("Got a request to show a posting but the posting"
@@ -716,10 +781,10 @@ class Tracker():
                         sel = pd.to_datetime(postings['deadline']) == date
                     selected_postings = postings.loc[sel, :]
                     if selected_postings.shape[0] == 0:
-                        posting_values = [['', '']]
+                        posting_values = [['', '', '']]
                     else:
                         posting_values = (
-                            selected_postings.loc[:, ['institution', 'title']]
+                            selected_postings.loc[:, posting_cols]
                             .values.tolist()
                         )
                     new_layout = gen_layout(
@@ -728,7 +793,8 @@ class Tracker():
                     )
                     window.close()
                     window = sg.Window("Deadlines", new_layout,
-                                       location=window_location)
+                                       location=window_location,
+                                       size=size, resizable=True)
 
             else:
                 logging.info(f"Got unknown event {event} with values {values}")
@@ -904,4 +970,268 @@ class Tracker():
         ]])
         popup.read()
 
+        return
+
+    def review_updates(self, window_location=(None, None)):
+        """Display a screen for reviewing updates
+
+        Returns
+        -------
+        TODO
+
+        """
+        if not os.path.isfile(self._pending_updates_url):
+            sg.popup("There are no pending updates")
+            return
+
+        updates = pd.read_pickle(self._pending_updates_url)
+
+        if updates.shape[0] == 0:
+            sg.popup("There are no pending updates")
+            return
+
+        # Get the updates in presentable form
+        updates.reset_index(inplace=True, drop=True)
+
+        def get_update_list(updates):
+            update_list = []
+            for ix, row in updates.iterrows():
+                update_notes = row['update_notes'].split(',')
+                update_notes = set([x.replace('new', '').strip() for x in
+                                    update_notes])
+                update_notes = [x for x in update_notes if len(x) > 0]
+
+                update_notes = ", ".join(update_notes)
+                update_list.append([
+                    row['origin'], row['title'], row['institution'], update_notes
+                ])
+            return update_list
+
+        update_list = get_update_list(updates)
+
+        columns = ['Origin', 'Title', 'Institution', 'Updated values']
+
+        table_layout = [[
+            sg.Table(values=update_list, enable_events=True, headings=columns,
+                     key='-UPDATE_LIST-', auto_size_columns=True,
+                     expand_y=True)
+        ]]
+
+        layout = [
+            [sg.Text("Updates pending review:", font='Helvetica 12 underline')],
+            [sg.Text("(click on row to edit)")],
+            [sg.Column(table_layout)],
+            [sg.HSeparator()],
+            [sg.Button("Clear all", key="-CLEAR-"),
+             sg.Button("Close", key="-EXIT-")]
+        ]
+
+        window = sg.Window("Updates", layout, location=window_location,
+                           resizable=True)
+
+        while True:
+            event, values = window.read()
+            window_location = window.CurrentLocation(True)
+            if event == sg.WIN_CLOSED or event == '-EXIT-':
+                window.close()
+                break
+            elif event == "-CLEAR-":
+                res = sg.popup_ok_cancel(
+                    "Do you want to clear all updates?\n"
+                    "This will keep all data at its current value"
+                )
+                if res == 'OK':
+                    os.remove(self._pending_updates_url)
+                    window.close()
+                    break
+            elif event == "-UPDATE_LIST-":
+                row = values['-UPDATE_LIST-']
+                if row is None or row == []:
+                    logging.info(f"Got empty event {event} with values {values}")
+                    continue
+                if not isinstance(row, int):
+                    row = row[0]
+
+                update_row = updates.iloc[row, :].copy()
+                changes = self.manage_update_request(update_row, window_location)
+                if changes:
+                    # Reload
+                    updates = pd.read_pickle(self._pending_updates_url)
+                    if updates.shape[0] == 0:
+                        sg.popup("Finished reviewing all updates!")
+                        window.close()
+                        break
+
+                    updates.reset_index(inplace=True, drop=True)
+                    update_list = get_update_list(updates)
+                    window['-UPDATE_LIST-'].update(values=update_list)
+            else:
+                logging.warning(f"Got unkown event {event}")
+
+        return
+
+    def manage_update_request(self, row, window_location=(None, None)):
+        """Review and edit an update row as shown in the update menu"""
+
+        status_change = False
+        font = 'Helvetica 12'
+
+        row = row.copy()
+        # Mini
+        title = row['title']
+
+        section = row['section']
+        institution = row['institution']
+        division = row['division']
+        department = row['department']
+        keywords = row['keywords']
+        text = row['full_text']
+        location = row['location']
+        deadline = row['deadline']
+        origin = row['origin']
+        url = row['url']
+        status = row['status']
+
+        header = [
+            [sg.Text('-------- Original Posting -------', font=font + ' underline')],
+            [sg.HSeparator()],
+            [sg.Text('Title:', font=font + ' underline'),
+             sg.Text(f'{title}', font=font),
+             sg.Text('Institution:', font=font + ' underline'),
+             sg.Text(f'{institution}', font=font)],
+            [sg.Text(f"{department} | {division} | {section} ")],
+            [sg.HSeparator()],
+            [sg.Text(f"Current status: {status}")],
+            [sg.Text(f'Location: {location}')],
+            [sg.Text(f'Deadline: {deadline}')],
+            [sg.Text(f'keywords: {keywords}')],
+            [sg.Text(f'Source: {origin}'), sg.Button('See posting', key='-VISIT-'),
+             sg.Button("See full text", key='-FULL-')],
+            [sg.HSeparator()],
+            [sg.Text('------ Updates -----', font=font + ' underline')],
+        ]
+
+        footer = [
+            [sg.HSeparator()],
+            [
+                sg.Button("Close", key='-CLOSE-'),
+                sg.Button("Accept all", key="-ALL-"),
+                sg.Button("Reject all", key='-NONE-')
+            ]
+        ]
+
+
+        def get_update_layout_from_row(row):
+            update_notes = row['update_notes'].split(',')
+            update_notes = set([x.replace('new', '').strip() for x in
+                                update_notes])
+            update_notes = [x for x in update_notes if len(x) > 0]
+            update_layout = []
+            for col in update_notes:
+                list_element = [
+                    sg.Text(f"New {col}: {row[col + '_new']}"),
+                    sg.Button("Accept", key=f"-ACCEPT-{col}-"),
+                ]
+                update_layout.append(list_element)
+            return update_layout, update_notes
+
+        def update_files(row, update_cols=None):
+            # Get the update file
+            updates = pd.read_pickle(self._pending_updates_url)
+            sel = (
+                (updates['origin'] == row['origin'].values[0]) &
+                (updates['origin_id'] == row['origin_id'].values[0])
+            )
+            to_update = updates.loc[sel, :].copy()
+            updates = updates.loc[~sel, :].copy()
+            if update_cols is None:
+                updates.to_pickle(self._pending_updates_url)
+                # In this case we have rejected all updates we're done
+                return None
+
+            # Check if we have any leftover updates
+            update_notes = to_update['update_notes'].values[0].split(',')
+            update_notes = set([x.replace('new', '').strip() for x in
+                                update_notes])
+            update_notes = [x for x in update_notes if len(x) > 0]
+
+            leftovers = set(update_notes) - set(update_cols)
+            new_row = None
+            if len(leftovers) == 0:
+                # nothing is left so we can erase the row
+                updates.to_pickle(self._pending_updates_url)
+            else:
+                # update the list to update
+                lbl = ", ".join(update_notes)
+                to_update['update_notes'] = lbl
+                updates = updates.append(to_update, ignore_index=True)
+                updates.to_pickle(self._pending_updates_url)
+                new_row = to_update
+
+            # Now actually update the data
+            data = pd.read_pickle(self._postings_url)
+            sel = (
+                (data['origin'] == row['origin'].values[0]) &
+                (data['origin_id'] == row['origin_id'].values[0])
+            )
+            for col in update_cols:
+                data.loc[sel, col] = row[col].values[0]
+            data.to_pickle(self._postings_url)
+            return new_row
+
+
+        update_layout, update_cols = get_update_layout_from_row(row)
+        layout = header + update_layout + footer
+
+        window = sg.Window('Update Review', layout, location=window_location,
+                           resizable=True)
+        while True:
+            event, values = window.read()
+            # update the window location
+            window_location = window.CurrentLocation(True)
+            if event == sg.WIN_CLOSED or event in ["-CLOSE-"]:
+                window.close()
+                return False
+            elif event == '-VISIT-':
+                webbrowser.open(url)
+            elif event == "-ALL-":
+                keep = ['origin', 'origin_id']
+                for col in update_cols:
+                    keep.append(col + '_new')
+                renames = {col + '_new': col for col in update_cols}
+                row = row.loc[keep].to_frame().T.rename(columns=renames).copy()
+                update_files(row, update_cols)
+                window.close()
+                return True
+            elif event == '-NONE-':
+                keep = ['origin', 'origin_id']
+                row = row.loc[keep].to_frame().T.copy()
+                update_files(row)
+                window.close()
+                return True
+            elif event == '-VISIT-':
+                webbrowser.open(url)
+            elif event == "-FULL-":
+                self.large_text_popup(text, location=window_location)
+            elif '-ACCEPT-' in event:
+                to_update = event.split('-')[2]
+                keep = ['origin', 'origin_id', to_update]
+                row = row.loc[keep].to_frame().T.copy()
+                new_row = update_files(row)
+                window.close()
+                if new_row is None:
+                    return True
+                else:
+                    return self.manage_update_request(new_row, window_location)
+            else:
+                logging.warning(f"Got unkown event {event}")
+
+
+        return status_change
+
+    def review_ignored(self):
+        return
+
+
+    def review_interested(self):
         return
