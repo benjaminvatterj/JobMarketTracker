@@ -21,4 +21,7 @@
 *.jpeg
 # Ignore _pycache__
 __pycache__/
-
+# Ignore the input, output, and storage folder
+inputs/
+output/
+storage/

@@ -1,5 +1,5 @@
 # Job Market Tracker
-An ugly and barely function job application software for the Economics Job Market.
+An ugly and barely functional job application software for the Economics Job Market.
 
 ## What is it?
 This is a small package to manage applications for the job market. It does the following things:
