@@ -20,10 +20,10 @@ python ./main.py
 ```
 a simple GUI should appear.
 
-This codes does have some requirements: pandas, xlrd, PySimpleGUI, humanize, numpy
+This codes does have some requirements: pandas, xlrd, PySimpleGUI, humanize, numpy, lxml
 you can install those by executing
 ```sh
-pip install pandas xlrd PySimpleGui humanize numpy
+pip install pandas xlrd PySimpleGui humanize numpy lxml
 ```
 
 ## Quick Start
@@ -56,6 +56,6 @@ each interested posting manually at this stage.
 
 ## Help!
 Check the help button in the GUI for further instructions on how to use this app.
-An issues, submit them through github
+Any issues, submit them through github
 
 

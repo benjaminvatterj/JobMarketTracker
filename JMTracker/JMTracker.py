@@ -5,9 +5,7 @@ import xlrd
 import webbrowser
 from shutil import copyfile
 from JMTracker import settings
-from JMTracker.scrappers import Scrapper
 import logging
-import requests
 import PySimpleGUI as sg
 import humanize
 
@@ -244,6 +242,14 @@ class Tracker():
 
         # -- 1) Validate the input --- #
         url = os.path.join(self._input_dir, "latest_aea.xls")
+        if not os.path.isfile(url):
+            message = (
+                "Couldnt locate the AEA file. This can happen if "
+                " you already updated the AEA file, forgot "
+                " to browse to the file in the menu, or manually included "
+                " the path to the file. Please try again."
+            )
+            return False, message
         workbook = xlrd.open_workbook(url, ignore_workbook_corruption=True)
         df = pd.read_excel(workbook)
 
@@ -302,6 +308,7 @@ class Tracker():
         new_ix = ~df['origin_id'].isin(previous['origin_id'].values)
         if new_ix.any():
             logging.info(f"Found {new_ix.sum()} new AEA postings! appending")
+            sg.popup(f"Found {new_ix.sum()} new AEA postings, adding to list.")
             new_postings = df.loc[new_ix, :].copy()
             postings = postings.append(new_postings, ignore_index=True)
             postings.to_pickle(self._postings_url)
@@ -377,6 +384,14 @@ class Tracker():
         logging.info("Update EJM postings")
         # --- Validate the input --- #
         new_url = os.path.join(self._input_dir, "latest_ejm.csv")
+        if not os.path.isfile(new_url):
+            message = (
+                "Couldnt locate the EJM file. This can happen if "
+                " you already updated the EJM file, forgot "
+                " to browse to the file in the menu, or manually included "
+                " the path to the file. Please try again."
+            )
+            return False, message
         df = pd.read_csv(new_url, header=1)
 
         renames = {
@@ -443,6 +458,7 @@ class Tracker():
         new_ix = ~df['origin_id'].isin(previous['origin_id'].values)
         if new_ix.any():
             logging.info(f"Found {new_ix.sum()} new EJM postings! appending")
+            sg.popup(f"Found {new_ix.sum()} new EJM postings, adding to list.")
             new_postings = df.loc[new_ix, :].copy()
             postings = postings.append(new_postings, ignore_index=True)
             postings.to_pickle(self._postings_url)
@@ -613,11 +629,17 @@ class Tracker():
         """
 
         # Prepare data
+        if not os.path.isfile(self._postings_url):
+            sg.popup_error("The postings files was not found. You must first "
+                           "update your postings before viewing deadlines.",
+                           location=window_location)
+            return
+
         all_postings = pd.read_pickle(self._postings_url)
         posting_cols = ['institution', 'title', 'status']
 
 
-        def filter_postings(all_postings, maybe=False, expired=True, applied=False):
+        def filter_postings(all_postings, maybe=True, expired=True, applied=False):
             status = ['interested']
             if maybe:
                 status.append('maybe')
@@ -679,7 +701,7 @@ class Tracker():
 
 
         def gen_layout(deadline_values, application_values, selected_deadline=None,
-                       date=None, maybe=False, expired=True, applied=False):
+                       date=None, maybe=True, expired=True, applied=False):
 
             columns = ['Deadline', 'Applications', 'Time left']
             color1 = sg.theme_input_background_color()
@@ -730,6 +752,10 @@ class Tracker():
 
         size = (None, None)
         postings = filter_postings(all_postings)
+        if postings.shape[0] == 0:
+            sg.popup_error("You have not marked any posting as interested or maybe"
+                           " so the deadline list is empty.")
+            return
         tbl, current_deadlines = deadlines_from_postings(postings)
         posting_values = [['', '', '']]
         selected_postings = None
@@ -739,7 +765,7 @@ class Tracker():
         window = sg.Window("Deadlines", layout, location=window_location,
                            size=size, resizable=True)
         layout_kwargs = {
-            'maybe': False,
+            'maybe': True,
             'expired': True,
             'applied': False
         }
@@ -787,6 +813,7 @@ class Tracker():
                 posting_values = (
                     postings.loc[:, posting_cols].values.tolist()
                 )
+                selected_postings = postings
                 selected_row = None
                 selected_date = "any date"
                 new_layout = gen_layout(tbl, posting_values, selected_row,
@@ -915,7 +942,9 @@ class Tracker():
              sg.Button("Mark as Applied", key='-APPLIED-'),
              sg.Button("Remove from deadlines", key='-IGNORE-'),
              sg.Button("Update deadline", key='-DEADLINE-'),
-             sg.Button("Edit/View Notes", key='-NOTES-')]
+             # FIXME: implement
+             # sg.Button("Edit/View Notes", key='-NOTES-')
+             ]
         ]
 
         # size = (600, 400)
@@ -987,28 +1016,6 @@ class Tracker():
 
         return status_change
 
-
-    def update_local_scrapping(self):
-        """Update the local list of postings
-
-        Returns
-        -------
-        None
-        """
-        raise Exception("Not implemented")
-        logging.info("Connecting to AEA to find link for download")
-        scrapper = Scrapper()
-        url = settings['AEA_url']
-        tree = scrapper.get_page(url, tree_only=True, redirect=True)
-        links = tree.xpath(
-            '//ul[@class="exportOptions"]/li[2]/a/'
-        )
-
-        r = requests.get(settings['AEA_url'], allow_redirects=True)
-        out_url = os.path.join(self._storage_dir, "AEA_download.xls")
-        with open(out_url, 'wb') as f:
-            f.write(r.content)
-        return links
 
     def large_text_popup(self, text, title="full text", size=(800, 800),
                          location=(None, None)):

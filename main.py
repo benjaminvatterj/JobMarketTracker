@@ -5,26 +5,6 @@ from textwrap import dedent
 import logging
 
 
-def update_files(args=None):
-    """Update the job market available postings files
-
-    Parameters
-    ----------
-    args : argumentparser args, optional
-        values passed to the CLI. Currently not used
-
-    Returns
-    -------
-    None
-        updates the local files
-
-    """
-    # Create the tracker object
-    from JMTracker import Tracker
-    tracker = Tracker()
-    tracker.update_local()
-    return
-
 
 def launch_gui(args=None):
     """Launch the system's gui"""

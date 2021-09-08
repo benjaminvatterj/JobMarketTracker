@@ -1,7 +1,6 @@
 import datetime
 import os
 import pandas as pd
-import seaborn as sns
 
 """
 This file contains global setting for the project
@@ -27,8 +26,6 @@ settings = {
     'EJM_login_url': 'https://econjobmarket.org/login/',
 }
 
-# Seaborn configuration
-sns.set(context='paper', style='white')
 # Pandas configuration
 pd.options.display.max_columns = 300
 pd.options.display.max_rows = 100
