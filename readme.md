@@ -1,12 +1,12 @@
 # Job Market Tracker
-An ugly and barely functional job application software for the Economics Job Market.
+A barely functional job application software for the Economics Job Market.
 
 ## What is it?
 This is a small package to manage applications for the job market. It does the following things:
 - Manages a list of postings viewed, under consideration, and ignored.
 - Allows you to manage deadlines for applications so that you don't miss anything important
 - Allows you to manage updates to old postings
-- Detects what postings are new and which one you've already seen
+- Detects which postings are new and which ones you've already seen
 
 What this currently doesnt do:
 - It won't download the posting files for you (or scrape anything)
