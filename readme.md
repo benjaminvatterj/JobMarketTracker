@@ -11,7 +11,7 @@ This is a small package to manage applications for the job market. It does the f
 What this currently doesnt do:
 - It won't download the posting files for you (or scrape anything)
 - It doesn't allow you to filter postings before reviewing one by one (you can do this in the spreadsheets before inputing it to this app)
-- For now, it doesn't allow manual entry of postings or management of interviewes. I hope to add those later.
+- For now, it doesn't provide any management of interviewes. I hope to add those later.
 
 ## Installation
 Simply clone/download this git and excute
