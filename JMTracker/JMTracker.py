@@ -1,4 +1,5 @@
 import os
+import numpy as np
 from textwrap import dedent
 import pandas as pd
 import xlrd
@@ -51,7 +52,8 @@ class Tracker():
         """Show the main GUI for this system
         """
         layout = [
-            [sg.Text("Update postings:"), sg.Button("update", key="-UPDATE POSTINGS-")],
+            [sg.Text("Update postings:"), sg.Button("view", key="-UPDATE POSTINGS-")],
+            [sg.Text("Manual entry:"), sg.Button("view", key='-MANUAL-')],
             [sg.Text("Review new postings:"), sg.Button("new", key="-NEW-")],
             [sg.Text("Manage updates:"), sg.Button("view", key="-UPDATES-")],
             [sg.Text("View deadlines:"), sg.Button("view", key="-DEADLINES-")],
@@ -72,6 +74,10 @@ class Tracker():
             elif event == "-NEW-":
                 window.close()
                 self.review_new_postings(window_location)
+                return self.main_gui()
+            elif event == "-MANUAL-":
+                window.close()
+                self.manual_entry(window_location)
                 return self.main_gui()
             elif event == "-DEADLINES-":
                 window.close()
@@ -740,7 +746,8 @@ class Tracker():
             ]
             header = [[sg.Text("Select date from left, click on item on the right"
                                " to edit")]]
-            footer = [[sg.Button("Close", key='-EXIT-')]]
+            footer = [[sg.Button("Close", key='-EXIT-'),
+                       sg.Button("Export to excel", key='-EXPORT-')]]
 
             layout = [[header], [sg.HSeparator()], [
                 sg.Column(dates_list_columns),
@@ -775,6 +782,13 @@ class Tracker():
             if event == sg.WIN_CLOSED or event == '-EXIT-':
                 window.close()
                 break
+            elif event == '-EXPORT-':
+                url = os.path.join(self._output_dir, 'deadlines.xlsx')
+                postings.to_excel(url, index=False)
+                sg.popup("All currently filtered deadlines have been exported\n"
+                         "to your output folder in the file deadlines.xlsx",
+                         location=window_location)
+                continue
             elif event == "-DATE LIST-":
                 row = values['-DATE LIST-']
                 if not isinstance(row, int):
@@ -1005,12 +1019,35 @@ class Tracker():
                 (postings['origin_id'] == row['origin_id'])
             if not sel.any():
                 logging.warning(f"Failed to find a match for row {row} in postings")
+                os.popup_error("Failed to match update row to postings. Is the "
+                               " postings file corrupt?")
+                status_change = False
+                return status_change
+            if sel.sum() > 1:
+                logging.warning("Single row selected multiple lines in postings.\n"
+                                "this suggests a corrupted postings file.\n"
+                                f"requested: {row}\n got \n {postings.loc[sel, :]}")
+                os.popup_error("Failed to match update row to postings. Is the "
+                               " postings file corrupt?")
                 status_change = False
                 return status_change
 
             ix = postings.loc[sel, :].index.values[0]
             row = row.to_frame().T
             row.index = [ix]
+            # Test one more time to be sure
+            test = (postings.loc[sel, 'origin'] == row['origin']) & \
+                (postings.loc[sel, 'origin_id'] == row['origin_id'])
+            if not test.all():
+                logging.warning("Failed to match the row with the data. "
+                                " This suggests a corrupted postings file."
+                                f"requested: {row}\n got \n {postings.loc[sel, :]}")
+                os.popup_error("Failed to match update row to postings. Is the "
+                               " postings file corrupt?")
+                status_change = False
+                return status_change
+
+            row = row.loc[:, ['status', 'deadline']]
             postings.update(row)
             postings.to_pickle(self._postings_url)
 
@@ -1290,4 +1327,96 @@ class Tracker():
 
 
     def review_interested(self):
+        return
+
+    def manual_entry(self, window_location=(None, None)):
+        """Manual entry menu for a new postings
+
+        Parameters
+        ----------
+        window_location : tuple
+            window location in pixels
+
+        Returns
+        -------
+        None
+        """
+        if not os.path.isfile(self._postings_url):
+            all_postings = None
+            next_id = 0
+        else:
+            all_postings = pd.read_pickle(self._postings_url)
+            sel = all_postings['origin'] == 'manual entry'
+            if not sel.any():
+                next_id = 0
+            else:
+                next_id = all_postings.loc[sel, 'origin_id'].max() + 1
+
+
+        layout = [
+            [sg.Text("Enter the following job posting details")],
+            [sg.Text("Title:"), sg.InputText(key='title')],
+            [sg.Text("Institution:"), sg.InputText(key='institution')],
+            [sg.Text("Deadline"),
+             sg.Input(key="deadline"),
+             sg.CalendarButton("select deadline", close_when_date_chosen=True,
+                               target='deadline', location=window_location,
+                               no_titlebar=False)],
+            [sg.Text("Department:"), sg.InputText(key='department')],
+            [sg.Text("Division:"), sg.InputText(key="division")],
+            [sg.Text("Section:"), sg.InputText(key="section")],
+            [sg.Text("Keywords:"), sg.InputText(key="keywords")],
+            [sg.Text("Location:"), sg.InputText(key="location")],
+            [sg.Text("Posting URL:"), sg.InputText(key="url")],
+            [sg.Button("Save and close", key="-SAVE-"),
+             sg.Button("Exit without saving", key="-EXIT-")]
+        ]
+
+        default_row = {
+            'origin': 'manual entry',
+            'origin_id': next_id,
+            'title': 'no title',
+            'institution': 'unknown',
+            'deadline': np.nan,
+            'status': 'interested',
+            'department': 'unknown',
+            'division': '',
+            'section': '',
+            'keywords': '',
+            'url': '',
+            'reviewed': True,
+            'full_text': '',
+            'updated': False,
+        }
+        window = sg.Window('Manual entry', layout, location=window_location)
+        while True:
+            event, values = window.read()
+            # update the window location
+            window_location = window.CurrentLocation(True)
+            if event == sg.WIN_CLOSED or event in ["-EXIT-"]:
+                res = sg.popup_ok_cancel("Are you sure you want to exit "
+                                         "without saving?",
+                                         location=window_location)
+                if res == 'OK' or res is None:
+                    window.close()
+                    break
+                else:
+                    continue
+            elif event == '-SAVE-':
+                window.close()
+                default_row.update(values)
+                row = pd.Series(default_row).to_frame().T
+                row['deadline'] = pd.to_datetime(row['deadline'], errors='coerce')
+                sel = row['deadline'].notna()
+                if sel.all():
+                    row['deadline'] = row['deadline'].dt.date.astype(str)
+                logging.info(f"Adding new postings:\n{row}")
+                if all_postings is None and not os.path.isfile(self._postings_url):
+                    row.to_pickle(self._postings_url)
+                else:
+                    all_postings = pd.read_pickle(self._postings_url)
+                    all_postings = all_postings.append(row, ignore_index=True)
+                    all_postings.to_pickle(self._postings_url)
+                break
+
         return
