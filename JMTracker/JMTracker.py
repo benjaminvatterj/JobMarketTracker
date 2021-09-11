@@ -5,7 +5,7 @@ import pandas as pd
 import xlrd
 import webbrowser
 from shutil import copyfile
-from JMTracker import settings
+from JMTracker import settings, input_option_settings
 import logging
 import PySimpleGUI as sg
 import humanize
@@ -30,7 +30,7 @@ class Tracker():
             os.mkdir(self._storage_dir)
 
         # Set the GUI theme
-        sg.theme("DarkTeal2")
+        sg.theme(settings['gui_theme'])
 
         # Check if we have the key storage
         self._postings_url = os.path.join(
@@ -143,86 +143,84 @@ class Tracker():
     def manual_update_files_gui(self, window_location=(None, None)):
         """Prompt to update files from AEA and EJM
         """
+        updated_origins = {x['origin']: False for x in input_option_settings}
 
-        def core_layout(AEA_done=False, EJM_done=False):
-            if not AEA_done:
-                AEA_layout = [
-                    [sg.Text("AEA file: "), sg.Input(),
-                     sg.FileBrowse(key="-IN AEA-")],
+        def core_layout(updated_origins):
+            """Produces the layout for the posting update"""
+            mid_layouts = []
+            for source_setting in input_option_settings:
+                origin = source_setting['origin']
+                if updated_origins.get(origin, False):
+                    mid_layouts.append(
+                        [sg.Text(f"{origin} listings updated successfully")]
+                    )
+                    continue
+                layout = [
+                    [sg.Text(f"{origin} file: "), sg.Input(),
+                     sg.FileBrowse(key=f"-IN-{origin}-")],
                     [sg.Text("hint: download from here"),
-                     sg.Button("link", key="-AEA LINK-")],
-                    [sg.Button("Update AEA", key="-UPDATE AEA-")],
+                     sg.Button("link", key=f"-LINK-{origin}-"),
+                     sg.Button("help", key=f"-HELP-{origin}-")],
+                    [sg.Button(f"Update {origin}", key=f"-UPDATE-{origin}-")],
                 ]
-            else:
-                AEA_layout = [sg.Text("AEA listings updated successfully")]
+                # Add a separator
+                if len(mid_layouts) > 0:
+                    mid_layouts.append([sg.HSeparator()])
+                    mid_layouts += layout
+                else:
+                    mid_layouts = layout
 
-            if not EJM_done:
-                EJM_layout = [
-                    [sg.Text("EJM File: "), sg.Input(),
-                     sg.FileBrowse(key="-IN EJM-")],
-                    [sg.Text("hint: download from here"),
-                     sg.Button("link", key="-EJM LINK-")],
-                    [sg.Button("Update EJM", key="-UPDATE EJM-")],
-                ]
-            else:
-                EJM_layout = [sg.Text("EJM listings updated successfully")]
+            layout = [
+                [sg.Column(mid_layouts)],
+                [sg.HSeparator()],
+                [sg.Button("Close and Save", key="-CLOSE-")]
+            ]
 
-            header = [[sg.Text("=== Update market postings ===")]]
-            footer = [[sg.Button("Close and Save", key="-CLOSE-")]]
-
-            layout = [header, AEA_layout, EJM_layout, footer]
             return layout
 
         # Building Window
+        layout = core_layout(updated_origins)
         size = (600, 300)
-        layout = core_layout()
         window = sg.Window('Refresh Listings', layout, size=size,
                            location=window_location)
-        AEA_done = False
-        EJM_done = False
         while True:
             event, values = window.read()
             window_location = window.CurrentLocation(True)
             if event == sg.WIN_CLOSED or event == "-CLOSE-":
+                window.close()
                 break
-            elif event == "-UPDATE AEA-":
-                aea_url = values["-IN AEA-"]
-                # copy to local input folder
-                new_url = os.path.join(self._input_dir, "latest_aea.xls")
-                if not os.path.isfile(aea_url):
-                    sg.Popup(f"AEA File {aea_url} not found!")
+            elif 'UPDATE' in event:
+                origin = event.split("-")[2]
+                source_setting = [x for x in input_option_settings if
+                                  x['origin'] == origin][0]
+
+                url = values[f"-IN-{origin}-"]
+                if not os.path.isfile(url):
+                    sg.popup(f"{origin} file {url} not found!")
                     continue
-                copyfile(aea_url, new_url)
-                status, message = self.update_aea_postings()
+                status, message = self.update_source_postings(
+                    url, source_setting, window_location
+                )
                 if not status:
-                    sg.Popup(message)
+                    sg.popup(message, location=window_location)
                     continue
                 window.close()
-                AEA_done = True
-                layout = core_layout(AEA_done, EJM_done)
+                updated_origins[origin] = True
+                layout = core_layout(updated_origins)
                 window = sg.Window('Refresh Listings', layout, size=size,
                                    location=window_location)
-            elif event == "-UPDATE EJM-":
-                ejm_url = values["-IN EJM-"]
-                if not os.path.isfile(ejm_url):
-                    sg.Popup(f"EJM File {ejm_url} not found!")
-                    continue
-                # copy to local input folder
-                new_url = os.path.join(self._input_dir, "latest_ejm.csv")
-                copyfile(ejm_url, new_url)
-                status, message = self.update_ejm_postings()
-                if not status:
-                    sg.Popup(message)
-                    continue
-                window.close()
-                EJM_done = True
-                layout = core_layout(AEA_done, EJM_done)
-                window = sg.Window('Refresh Listings', layout, size=size,
-                                   location=window_location)
-            elif event == "-AEA LINK-":
-                webbrowser.open(settings['AEA_url'])
-            elif event == "-EJM LINK-":
-                webbrowser.open(settings['EJM_url'])
+            elif 'LINK' in event:
+                origin = event.split("-")[2]
+                source_setting = [x for x in input_option_settings if
+                                  x['origin'] == origin][0]
+                url = source_setting['download_url']
+                webbrowser.open(url)
+            elif 'HELP' in event:
+                origin = event.split("-")[2]
+                source_setting = [x for x in input_option_settings if
+                                  x['origin'] == origin][0]
+                txt = source_setting['download_instructions']
+                sg.popup(txt, location=window_location)
             else:
                 logging.warning(f"Got unkown event {event}")
 
@@ -230,6 +228,198 @@ class Tracker():
         window.close()
 
         return
+
+    def update_source_postings(self, url, source_setting,
+                               window_location=(None, None)):
+        """Process the postings for a specific source.
+
+        Parameters
+        ----------
+        url: str
+            path to the file the user indicated when updating in the GUI
+
+        source_setting : dict
+            the dictionary containing the source's settings
+
+        window_location : tuple, optional
+            window location for any popup
+
+        Returns
+        -------
+        status: bool
+            success status of the update process
+
+        message: str
+            in case of failure a descriptive message
+
+        """
+
+        # --- 1) Copy, load, validate, and parse --- #
+        new_url = os.path.join(self._input_dir, source_setting['input_file_name'])
+        copyfile(url, new_url)
+
+        origin = source_setting['origin']
+
+        if not os.path.isfile(new_url):
+            message = (
+                f"Couldnt locate the {origin} file. This can happen if "
+                f" you already updated the {origin} file, forgot "
+                " to browse to the file in the menu, or manually included "
+                " the path to the file. Please try again."
+            )
+            return False, message
+
+        # Load the data
+        df = source_setting['loader'](new_url)
+        # Validate it if requested
+        validator = source_setting.get('validator', None)
+        if validator is not None:
+            status, message = validator(df)
+            if not status:
+                return status, message
+
+        # Renaming rules
+        renaming_rules = source_setting.get('renaming_rules', {})
+        df.rename(columns=renaming_rules, inplace=True)
+
+        # Keep columns
+        required_columns = ['origin_id', 'title', 'location', 'institution',
+                            'deadline', 'url', 'full_text']
+        optional_columns = ['section', 'division', 'department', 'keywords',
+                            'full_text']
+
+        keep = (
+            set(required_columns) | set(optional_columns) |
+            set([x for x in renaming_rules.values()])
+        ) & set(df.columns)
+        keep = list(keep)
+        df = df.loc[:, keep].copy()
+
+        # Load the current postings for reference
+        if os.path.isfile(self._postings_url):
+            all_postings = pd.read_pickle(self._postings_url)
+        else:
+            all_postings = None
+
+        # Handle missing required
+        missing_required = [x for x in required_columns if x not in df.columns]
+        for col in missing_required:
+            generator = source_setting.get(f'{col}_generator', None)
+            if generator is None:
+                message = dedent(f"""
+                The file for {origin} is missing required columns {col}
+                and a generator was not supplied in the setting. This
+                likely indicates your file is corrupted or wrong, or that
+                you modified the system setting erronously.
+                """)
+                return False, message
+            df[col] = df.apply(lambda x: generator(x, all_postings), axis=1)
+
+
+        # Handle missing optional
+        missing_optional = [x for x in optional_columns if x not in df.columns]
+        for col in missing_optional:
+            generator = source_setting.get(f'{col}_generator', None)
+            if generator is None:
+                df[col] = ''
+            else:
+                df[col] = df.apply(lambda x: generator(x, all_postings), axis=1)
+
+        # Order the right way, just for easier inspection
+        col_order = required_columns + optional_columns
+        col_order += [x for x in df.columns if x not in col_order]
+        df = df.loc[:, col_order].copy()
+
+        # Add the custom columns
+        df['date_received'] = "{}".format(settings['today'])
+        df['origin'] = origin
+        df['reviewed'] = False
+        df['status'] = 'new'
+        df['notes'] = ''
+        df['update_notes'] = ''
+        df['updated'] = False
+
+        # --- 2) Compare with stored values --- #
+
+        if self._first_run:
+            # In this case we just add the extra info and store
+            logging.info(f"First time storing {origin} data")
+            df.to_pickle(self._postings_url)
+            self._first_run = False
+            return True, ''
+
+        postings = pd.read_pickle(self._postings_url)
+        previous = postings.loc[postings['origin'] == origin, ['origin_id']]
+        if previous.shape[0] == 0:
+            logging.info(f"First time storing {origin} data, appending")
+            postings = postings.append(df, ignore_index=True)
+            postings.to_pickle(self._postings_url)
+            return True, ''
+
+        new_ix = ~df['origin_id'].isin(previous['origin_id'].values)
+        if new_ix.any():
+            logging.info(f"Found {new_ix.sum()} new {origin} postings! appending")
+            sg.popup(f"Found {new_ix.sum()} new {origin} postings, adding to list.")
+            new_postings = df.loc[new_ix, :].copy()
+            postings = postings.append(new_postings, ignore_index=True)
+            postings.to_pickle(self._postings_url)
+            df = df.loc[~new_ix, :].copy()
+
+        # No more to add
+        if df.shape[0] == 0:
+            logging.info(f"All {origin} postings were new")
+            return True, ''
+
+
+        # Check the overalpp to see if there's anything new
+        check_cols = ['url', 'title', 'section', 'division', 'deadline',
+                      'institution']
+        previous = postings.loc[postings['origin'] == origin, :].copy()
+
+        df = df.loc[:, check_cols + ['origin', 'origin_id']]
+        df = previous.merge(df, on=['origin', 'origin_id'], how='left',
+                            validate='1:1', suffixes=('', '_new'))
+
+        total_updated = 0
+        for col in check_cols:
+            base_col = col
+            if col == 'deadline' and 'original_deadline' in df.columns:
+                base_col = 'original_deadline'
+            sel = (df[base_col] != df[col + '_new']) & (df[col + '_new'].notna())
+            if sel.any() and col == 'deadline':
+                test = pd.to_datetime(df[base_col]) - pd.to_datetime(df[col + '_new'])
+                test = test.dt.days != 0
+                sel = sel & test
+            total_updated = max(total_updated, sel.sum())
+            df.loc[sel, 'updated'] = True
+            df.loc[sel, 'update_notes'] += f'new {col},'
+
+        if total_updated > 0:
+            logging.info(f"Found {total_updated} updated in {origin} postings!")
+            sg.popup(f"Found {total_updated} updates for {origin} listings. \n"
+                     "You can review them in the `review updates' menu.")
+
+            # Store the updates separately for review
+            df = df.loc[df['updated'], :].drop('updated', axis=1).copy()
+            # Check if we need to merge with any past updates
+            if not os.path.isfile(self._pending_updates_url):
+                df.to_pickle(self._pending_updates_url)
+                return True, ''
+
+            updates = pd.read_pickle(self._pending_updates_url)
+            # In this case we just want to update whatever we have included
+            updates['version'] = 0
+            df['version'] = 1
+            updates = updates.append(df, ignore_index=True)
+            updates.sort_values('version', inplace=True)
+            updates.drop_duplicates(['origin', 'origin_id', 'version'],
+                                    inplace=True, keep='last')
+            updates.drop('version', axis=1, inplace=True)
+            updates.to_pickle(self._pending_updates_url)
+        else:
+            logging.info(f"No new postings in {origin}")
+
+        return True, ''
 
     def update_aea_postings(self):
         """Process the latest_aea.xls currently in the input folder
@@ -244,6 +434,8 @@ class Tracker():
         message: str
             in case of failure a descriptive message
         """
+        # FIXME: remove in the next commit
+        raise Exception("Deprecated, will be removed in next version")
         logging.info("Updating AEA postings")
 
         # -- 1) Validate the input --- #
@@ -337,9 +529,13 @@ class Tracker():
 
         total_updated = 0
         for col in check_cols:
-            sel = (df[col] != df[col + '_new']) & (df[col + '_new'].notna())
+            if col != 'deadline':
+                base_col = 'deadline'
+            else:
+                base_col = 'original_deadline'
+            sel = (df[base_col] != df[col + '_new']) & (df[col + '_new'].notna())
             if sel.any() and col == 'deadline':
-                test = pd.to_datetime(df[col]) - pd.to_datetime(df[col + '_new'])
+                test = pd.to_datetime(df[base_col]) - pd.to_datetime(df[col + '_new'])
                 test = test.dt.days != 0
                 sel = sel & test
             total_updated = max(total_updated, sel.sum())
@@ -387,6 +583,8 @@ class Tracker():
             in case of failure a descriptive message
 
         """
+        # FIXME: remove in next commit
+        raise Exception("deprecated, removed in next version")
         logging.info("Update EJM postings")
         # --- Validate the input --- #
         new_url = os.path.join(self._input_dir, "latest_ejm.csv")
@@ -486,9 +684,13 @@ class Tracker():
 
         total_updated = 0
         for col in check_cols:
-            sel = (df[col] != df[col + '_new']) & (df[col + '_new'].notna())
+            if col != 'deadline':
+                base_col = 'deadline'
+            else:
+                base_col = 'original_deadline'
+            sel = (df[base_col] != df[col + '_new']) & (df[col + '_new'].notna())
             if sel.any() and col == 'deadline':
-                test = pd.to_datetime(df[col]) - pd.to_datetime(df[col + '_new'])
+                test = pd.to_datetime(df[base_col]) - pd.to_datetime(df[col + '_new'])
                 test = test.dt.days != 0
                 sel = sel & test
             total_updated = max(total_updated, sel.sum())
@@ -998,6 +1200,9 @@ class Tracker():
                     pd.to_datetime(new_deadline)
                     .to_pydatetime().date().__str__()
                 )
+                # Note: this is a patch for those already using the system
+                if 'original_deadline' not in row.index:
+                    row['original_deadline'] = deadline
                 row['deadline'] = new_deadline
                 status_change = True
                 window.close()
