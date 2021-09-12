@@ -14,7 +14,7 @@ What this currently doesnt do:
 - For now, it doesn't provide any management of interviewes. I hope to add those later.
 
 ## Installation
-Simply clone/download this git and excute
+Simply clone/download this git and execute
 ```sh
 python ./main.py
 ```
@@ -25,13 +25,17 @@ you can install those by executing
 ```sh
 pip install pandas xlrd PySimpleGui humanize numpy lxml
 ```
+or
+```sh
+pip install -r requirements.txt
+```
 
 ## Quick Start
 
 1) Go to "update postings" and download the AEA and EJM files to your local
-computer. For the AEA download the native XML and for the EJM download in CVS.
+computer. For the AEA download the native XLS and for the EJM download in CSV.
 This system does not provide any type of filtering, so if you want to exclude
-rows, you should do so manually in the XML/CSV files. Once you're ready, set
+rows, you should do so manually in the XLS/CSV files. Once you're ready, set
 the location of each file in the finder, and click the update. The system will
 review each posting in each file and evaluate whether there are new postings or
 updates to existings ones. New postings will be added to your local new-posting
