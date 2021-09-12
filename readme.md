@@ -58,6 +58,14 @@ it is recommended for you to review each deadline (particularly those that show
 up as very far in the future). The system allows you to modify the deadline of
 each interested posting manually at this stage.
 
+## Adding sources (Advanced)
+
+The system allows adding custom sources beyond AEA and EJM. Sources are added as
+dictionaries to the list variables input_option_settings in settings.py. Each source
+is a dictionary that must specify a number of mandatory keys, including a url
+for the source, the name of the source, and a function to read the
+data. See settings.py for further details and examples.
+
 ## Help!
 Check the help button in the GUI for further instructions on how to use this app.
 Any issues, submit them through github
