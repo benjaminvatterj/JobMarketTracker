@@ -284,7 +284,7 @@ class Tracker():
 
         # Keep columns
         required_columns = ['origin_id', 'title', 'location', 'institution',
-                            'deadline', 'url', 'full_text']
+                            'deadline', 'url']
         optional_columns = ['section', 'division', 'department', 'keywords',
                             'full_text']
 
@@ -371,7 +371,7 @@ class Tracker():
             return True, ''
 
 
-        # Check the overalpp to see if there's anything new
+        # Check the overlapp to see if there's anything new
         check_cols = ['url', 'title', 'section', 'division', 'deadline',
                       'institution']
         previous = postings.loc[postings['origin'] == origin, :].copy()
