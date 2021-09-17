@@ -30,6 +30,17 @@ or
 pip install -r requirements.txt
 ```
 
+## Known Issues
+
+If the code crashes on load, a typical issue is the libraries being out-of-date.
+Either follow the "install -r" method or run
+
+```sh
+
+pip install --upgrade pandas xlrd PySimpleGui humanize numpy lxml
+
+```
+
 ## Quick Start
 
 1) Go to "update postings" and download the AEA and EJM files to your local
