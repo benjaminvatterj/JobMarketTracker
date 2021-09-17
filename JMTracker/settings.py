@@ -1,7 +1,10 @@
 import datetime
 import os
 import pandas as pd
-from JMTracker.auxiliary import corrupt_excel_reader, country_state_city_aggregator
+from JMTracker.auxiliary import (
+    corrupt_excel_reader, country_state_city_aggregator,
+    validate_unique_id
+)
 
 """
 This file contains global setting for the project
@@ -86,8 +89,7 @@ input_option_settings = [
         # A validator function to run on the file after loaded. This function
         # should return two things: status (bool, True indicates all is good),
         # message (str, popup message in case of failure).
-        # FIXME: implement
-        'validator': None,
+        'validator': lambda x: validate_unique_id(x, 'jp_id', 'AEA'),
         # Column rename rules
         'renaming_rules': {
             'jp_id': 'origin_id',
@@ -114,8 +116,7 @@ input_option_settings = [
         'origin': 'EJM',
         'download_url': 'https://econjobmarket.org/users/positions/download/a',
         'input_file_name': 'latest_ejm.csv',
-        # FIXME: implement
-        'validator': None,
+        'validator': lambda x: validate_unique_id(x, 'Id', 'EJM'),
         'download_instructions': (
             'download the CSV file. Careful to download all'
             'postings if this is your first time using this app but not the first '
@@ -143,6 +144,23 @@ input_option_settings = [
         'location_generator': country_state_city_aggregator,
         # list of columns renames that we dont want to store
         'to_drop': ['city', 'state', 'country'],
+    },
+    {
+        'origin': 'NUGoogleDocs',
+        'download_url': 'https://docs.google.com/spreadsheets/d/1c4hB5jqfKY6y6DcLF7Cpd6OOVlwhuKgWjKzOwU0kDYM/edit#gid=0',
+        'input_file_name': 'latest_nu.csv',
+        'validator': lambda x: validate_unique_id(x, 'ID', 'NUGoogleDocs'),
+        'download_instructions': 'Download as CSV!',
+        'loader': pd.read_csv,
+        'renaming_rules': {
+            'ID': 'origin_id',
+            'Title': 'title',
+            'Institution': 'institution',
+            'Department': 'department',
+            'Deadline': 'deadline',
+            'URL': 'url'
+        },
+        'location_generator': (lambda x, y: 'unknown')
     }
 ]
 

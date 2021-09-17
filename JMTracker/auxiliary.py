@@ -26,6 +26,50 @@ def corrupt_excel_reader(url):
     return df
 
 
+def validate_unique_id(df, id_col, source):
+    """Validate that the id columns has no missings and no
+    repeated values
+
+    Parameters
+    ----------
+    df : DataFrame
+        the dataframe to examine
+
+    id_col : str
+        the name of the id column
+
+    source: str
+        the name of the source we're processing
+
+    Returns
+    -------
+    status: bool
+        False if failed the test
+    message: str
+        Message to show user if caught a failure
+
+    """
+
+
+    any_missings = df[id_col].isna().any()
+    if any_missings:
+        message = (f"The file for {source} has missing values"
+                   " in the identifier column {id_col}. This app assumes"
+                   " that the identifier is never missing. If this is no longer"
+                   " the case, please submit an issue.")
+        return False, message
+
+    dups = df[id_col].nunique()
+    if dups != df.shape[0]:
+        message = (f"The file for {source} has duplicated values "
+                   "for identifier column {id_col}. This app assumes "
+                   " that the identifier is unique. If this is no longer true "
+                   " please submit an issue.")
+        return False, message
+
+    return True, ''
+
+
 def country_state_city_aggregator(row, df):
     """Combines country, state and city to a single location
 
