@@ -3,7 +3,7 @@ import os
 import pandas as pd
 from JMTracker.auxiliary import (
     corrupt_excel_reader, country_state_city_aggregator,
-    validate_unique_id
+    validate_unique_id, validator_generator, validate_extension
 )
 
 """
@@ -79,8 +79,14 @@ input_option_settings = [
         'origin': 'AEA',
         # The url to link to for file download
         'download_url': 'https://www.aeaweb.org/joe/listings?issue=2021-02',
+        # Excepcted extension, lower-case no period
+        'expected_extension': 'xls',
         # Instructions to show user
         'download_instructions': 'download the "native XLS" file, do not modify',
+        # A validator for the path given for the file to load
+        'url_validator': validator_generator(
+            [validate_extension], 'AEA', [('xls', 'AEA')]
+        ),
         # name of the file to use to store the latest version in the inputs
         'input_file_name': 'latest_aea.xls',
         # input loader. A function that takes the url and returns the
@@ -89,7 +95,9 @@ input_option_settings = [
         # A validator function to run on the file after loaded. This function
         # should return two things: status (bool, True indicates all is good),
         # message (str, popup message in case of failure).
-        'validator': lambda x: validate_unique_id(x, 'jp_id', 'AEA'),
+        'validator': validator_generator(
+            [validate_unique_id], 'AEA', [('jp_id', 'AEA')]
+        ),
         # Column rename rules
         'renaming_rules': {
             'jp_id': 'origin_id',
@@ -115,8 +123,15 @@ input_option_settings = [
     {
         'origin': 'EJM',
         'download_url': 'https://econjobmarket.org/users/positions/download/a',
+        'expected_extension': 'csv',
+        # A validator for the path given for the file to load
+        'url_validator': validator_generator(
+            [validate_extension], 'EJM', [('csv', 'EJM')]
+        ),
         'input_file_name': 'latest_ejm.csv',
-        'validator': lambda x: validate_unique_id(x, 'Id', 'EJM'),
+        'validator': validator_generator(
+            [validate_unique_id], 'EJM', [('Id', 'EJM')]
+        ),
         'download_instructions': (
             'download the CSV file. Careful to download all'
             'postings if this is your first time using this app but not the first '
@@ -147,9 +162,16 @@ input_option_settings = [
     },
     {
         'origin': 'NUGoogleDocs',
-        'download_url': 'https://docs.google.com/spreadsheets/d/1c4hB5jqfKY6y6DcLF7Cpd6OOVlwhuKgWjKzOwU0kDYM/edit#gid=0',
+        'download_url': 'https://docs.google.com/spreadsheets/d/1c4hB5jqfKY6y6DcLF7Cpd6OOVlwhuKgWjKzOwU0kDYM/edit?usp=sharing',
+        'expected_extension': 'csv',
+        # A validator for the path given for the file to load
+        'url_validator': validator_generator(
+            [validate_extension], 'NUGoogleDocs', [('csv', 'NUGoogleDocs')]
+        ),
         'input_file_name': 'latest_nu.csv',
-        'validator': lambda x: validate_unique_id(x, 'ID', 'NUGoogleDocs'),
+        'validator': validator_generator(
+            [validate_unique_id], 'NUGoogleDocs', [('ID', 'NUGoogleDocs')]
+        ),
         'download_instructions': 'Download as CSV!',
         'loader': pd.read_csv,
         'renaming_rules': {

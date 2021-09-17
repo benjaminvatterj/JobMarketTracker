@@ -154,10 +154,14 @@ class Tracker():
                         [sg.Text(f"{origin} listings updated successfully")]
                     )
                     continue
+                expected_extension = source_setting.get('expected_extension', None)
+                hint = 'hint: download from here'
+                if expected_extension is not None:
+                    hint = f'hind: download from here as {expected_extension}'
                 layout = [
                     [sg.Text(f"{origin} file: "), sg.Input(),
                      sg.FileBrowse(key=f"-IN-{origin}-")],
-                    [sg.Text("hint: download from here"),
+                    [sg.Text(hint),
                      sg.Button("link", key=f"-LINK-{origin}-"),
                      sg.Button("help", key=f"-HELP-{origin}-")],
                     [sg.Button(f"Update {origin}", key=f"-UPDATE-{origin}-")],
@@ -254,6 +258,13 @@ class Tracker():
         """
 
         # --- 1) Copy, load, validate, and parse --- #
+        url_validator = source_setting.get('url_validator', None)
+        if url_validator is not None:
+            status, message = url_validator(url)
+            if not status:
+                return status, message
+
+        # Copy to new locations
         new_url = os.path.join(self._input_dir, source_setting['input_file_name'])
         copyfile(url, new_url)
 
@@ -1040,7 +1051,7 @@ class Tracker():
             elif event == "-UPDATE_LIST-":
                 row = values['-UPDATE_LIST-']
                 if row is None or row == []:
-                    logging.info(f"Got empty event {event} with values {values}")
+                    logging.debug(f"Got empty event {event} with values {values}")
                     continue
                 if not isinstance(row, int):
                     row = row[0]
