@@ -1,6 +1,7 @@
 import datetime
 import os
 import pandas as pd
+from JMTracker.scrapper import AJOScrapper
 from JMTracker.auxiliary import (
     corrupt_excel_reader, country_state_city_aggregator,
     validate_unique_id, validator_generator, validate_extension
@@ -183,6 +184,23 @@ input_option_settings = [
             'URL': 'url'
         },
         'location_generator': (lambda x, y: 'unknown')
+    },
+    {
+        'origin': 'AJO',
+        'download_url': None,
+        'download_action': AJOScrapper.gui_scrape,
+        'expected_extension': 'csv (Warning: this is still in beta.)',
+        'url_validator': None,
+        'input_file_name': None,
+        'validator': validator_generator(
+            [validate_unique_id], 'AJO', [('origin_id', 'AJO')]
+        ),
+        'download_instructions': (
+            'Click on the download link to scrape AJO.\n'
+            ' === Please review any deadlines === \n. This is still in beta.'
+        ),
+        'loader': pd.read_csv,
+        'renaming_rules': {}
     }
 ]
 

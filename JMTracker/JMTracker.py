@@ -216,8 +216,19 @@ class Tracker():
                 origin = event.split("-")[2]
                 source_setting = [x for x in input_option_settings if
                                   x['origin'] == origin][0]
-                url = source_setting['download_url']
-                webbrowser.open(url)
+                url = source_setting.get('download_url', None)
+                if url is not None:
+                    webbrowser.open(url)
+                else:
+                    action = source_setting.get('download_action', None)
+                    if action is None:
+                        sg.popup_error("Something went wrong. Couldn't find a link"
+                                       " or an action for downloading")
+                        continue
+                    else:
+                        action(window_location)
+                        continue
+
             elif 'HELP' in event:
                 origin = event.split("-")[2]
                 source_setting = [x for x in input_option_settings if
@@ -265,8 +276,12 @@ class Tracker():
                 return status, message
 
         # Copy to new locations
-        new_url = os.path.join(self._input_dir, source_setting['input_file_name'])
-        copyfile(url, new_url)
+        new_url = source_setting.get('input_file_name', None)
+        if new_url is not None:
+            new_url = os.path.join(self._input_dir, new_url)
+            copyfile(url, new_url)
+        else:
+            new_url = url
 
         origin = source_setting['origin']
 
@@ -369,7 +384,9 @@ class Tracker():
         new_ix = ~df['origin_id'].isin(previous['origin_id'].values)
         if new_ix.any():
             logging.info(f"Found {new_ix.sum()} new {origin} postings! appending")
-            sg.popup(f"Found {new_ix.sum()} new {origin} postings, adding to list.")
+            sg.popup(f"Found {new_ix.sum()} new {origin} postings, adding to list.\n"
+                     "==== PLEASE REVIEW ALL DEADLINES ===\n"
+                     "They are quite often wrong or not available in the platforms.")
             new_postings = df.loc[new_ix, :].copy()
             postings = postings.append(new_postings, ignore_index=True)
             postings.to_pickle(self._postings_url)
