@@ -20,12 +20,7 @@ python ./main.py
 ```
 a simple GUI should appear.
 
-This codes does have some requirements: pandas, xlrd, PySimpleGUI, humanize, numpy, lxml
-you can install those by executing
-```sh
-pip install pandas xlrd PySimpleGui humanize numpy lxml
-```
-or
+This codes does have some requirements which you can install with
 ```sh
 pip install -r requirements.txt
 ```
@@ -37,7 +32,7 @@ Either follow the "install -r" method or run
 
 ```sh
 
-pip install --upgrade pandas xlrd PySimpleGui humanize numpy lxml
+pip install --upgrade pandas xlrd PySimpleGui humanize numpy lxml humanize beautifulsoup4 requests
 
 ```
 
