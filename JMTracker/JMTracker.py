@@ -57,7 +57,8 @@ class Tracker():
             [sg.Text("Review new postings:"), sg.Button("new", key="-NEW-")],
             [sg.Text("Manage updates:"), sg.Button("view", key="-UPDATES-")],
             [sg.Text("Edit ignored postings:"), sg.Button("view", key="-IGNORED-")],
-            [sg.Text("View deadlines:"), sg.Button("view", key="-DEADLINES-")],
+            [sg.Text("View deadlines:"), sg.Button("view", key="-DEADLINES-"),
+             sg.Button("legacy view", key='-DEADLINES_OLD-')],
             [sg.Text("View help:"), sg.Button("view", key="-HELP-")],
             [sg.Button("Close")]
         ]
@@ -84,9 +85,13 @@ class Tracker():
                 window.close()
                 self.manual_entry(window_location)
                 return self.main_gui()
-            elif event == "-DEADLINES-":
+            elif event == "-DEADLINES_OLD-":
                 window.close()
                 self.view_deadlines(window_location)
+                return self.main_gui()
+            elif event == "-DEADLINES-":
+                window.close()
+                self.review_interested_gui(window_location)
                 return self.main_gui()
             elif event == "-UPDATES-":
                 window.close()
@@ -1554,6 +1559,191 @@ class Tracker():
                     layout_kwargs['expired'] = values['-EXPIRED-']
                 else:
                     layout_kwargs['sort_by'] = values['-ORDER-']
+                postings = filter_postings(all_postings, **layout_kwargs)
+                table = table_from_postings(postings)
+                new_layout = gen_layout(table, **layout_kwargs)
+                window.close()
+                window = gen_window(new_layout, size, window_location)
+            else:
+                logging.info(f"Got unknown event {event} with values {values}")
+        return
+
+
+    def review_interested_gui(self, window_location=(None, None)):
+        """Review postings marked as interested and change their status
+
+        Parameters
+        ----------
+        window_location : tuple, optional
+            location in which to draw the window
+
+        Returns
+        -------
+        TODO
+        """
+        # Prepare data
+        if not os.path.isfile(self._postings_url):
+            sg.popup_error("The postings files was not found. You must first "
+                           "update your postings before viewing ignored.",
+                           location=window_location)
+            return
+
+        all_postings = pd.read_pickle(self._postings_url)
+        order_cols = ['status', 'institution', 'title',
+                      'department', 'location', 'deadline']
+        posting_cols = ['status', 'institution', 'title',
+                        'department', 'location', 'time_left']
+
+        def filter_postings(postings, maybe=False, applied=False,
+                            expired=False, sort_by='deadline'):
+            status = ['interested']
+            if maybe:
+                status.append('maybe')
+            if applied:
+                status.append('applied')
+            postings = (
+                all_postings.loc[all_postings['status'].isin(status), :]
+                .copy()
+            )
+            if not expired:
+                sel = (
+                    pd.to_datetime(postings['deadline']
+                                   ) >= pd.Timestamp("today")
+                ) | (
+                    postings['deadline'].isna()
+                )
+                postings = postings.loc[sel, :].copy()
+            postings.sort_values(by=sort_by, inplace=True)
+            return postings
+
+        def table_from_postings(postings, posting_cols=posting_cols):
+            # Ensure we have the right columns
+
+            postings = postings.copy()
+            sel = postings['deadline'].notna()
+            postings.loc[sel, 'deadline'] =\
+                pd.to_datetime(postings.loc[sel, 'deadline'])
+            postings['deadline'].fillna('Unknown', inplace=True)
+            # Get the number of applications per deadline
+            today = settings['today']
+
+            def _human_date_delta(x, today=today):
+                if x == 'Unknown':
+                    return "Unknown deadline"
+                x = pd.to_datetime(x).to_pydatetime().date()
+                return humanize.naturaltime(today - x).replace("from now", "").strip()
+
+            postings['time_left'] = postings['deadline'].apply(
+                _human_date_delta
+            )
+            columns = posting_cols
+            for col in columns:
+                postings[col].fillna('', inplace=True)
+                postings[col] = postings[col].astype(str)
+
+            # starting values
+            tbl = postings.loc[:, columns].values.tolist()
+            return tbl
+
+        def gen_layout(table, maybe=False, expired=False, applied=False,
+                       sort_by='deadline', order_cols=order_cols):
+
+            columns = [x.capitalize() for x in order_cols]
+            row_colors = None
+
+            dates_list_columns = [
+                [sg.Table(values=table, enable_events=True,
+                          headings=columns, key='-POSTING LIST-',
+                          auto_size_columns=True, expand_x=True,
+                          col_widths=[10, 50, 50, 50, 10],
+                          num_rows=20,
+                          expand_y=True, row_colors=row_colors)],
+                [sg.CB("show past", key="-EXPIRED-", default=expired,
+                       enable_events=True),
+                 sg.CB("show maybes", key="-MAYBE-", default=maybe,
+                       enable_events=True),
+                 sg.CB("show applied", key="-APPLIED-", default=applied,
+                       enable_events=True),
+                 sg.Text("Sort by:"),
+                 sg.Combo(order_cols, default_value=sort_by,
+                          key='-ORDER-', enable_events=True)]
+            ]
+            header = [[sg.Text("Postings marked as interested, "
+                               "click on an item to review"
+                               " and modify status")]]
+            footer = [[sg.Button("Close", key='-EXIT-'),
+                       sg.Button("Export to excel", key='-EXPORT-')]]
+
+            layout = [[header], [sg.HSeparator()],
+                      [sg.Column(dates_list_columns, key='-COL-')],
+                      [sg.HSeparator()], [footer]]
+            return layout
+
+        def gen_window(layout, size, location):
+            window = sg.Window('Applications', size=size, location=location,
+                               auto_size_text=True, auto_size_buttons=True,
+                               grab_anywhere=False, resizable=True,
+                               layout=layout, finalize=True)
+            window['-COL-'].expand(True, True)
+            window['-POSTING LIST-'].expand(True, True)
+            window['-POSTING LIST-'].table_frame.pack(expand=True, fill='both')
+            return window
+
+        sort_by = 'deadline'
+        size = (None, None)
+        postings = filter_postings(all_postings, sort_by=sort_by)
+        if postings.shape[0] == 0:
+            sg.popup_error("You have not marked any posting as ignored"
+                           " so the list is empty.")
+            return
+        table = table_from_postings(postings)
+        layout = gen_layout(table, sort_by=sort_by)
+        window = gen_window(layout, size, window_location)
+        layout_kwargs = {
+            'expired': False,
+            'sort_by': sort_by,
+            'maybe': False,
+            'applied': False
+        }
+        while True:
+            event, values = window.read()
+            window_location = window.CurrentLocation(True)
+            size = window.size
+
+            if event == sg.WIN_CLOSED or event == '-EXIT-':
+                window.close()
+                break
+            elif event == '-EXPORT-':
+                url = os.path.join(self._output_dir, 'deadlines.xlsx')
+                postings.to_excel(url, index=False)
+                sg.popup("All currently filtered deadlines have been exported\n"
+                         "to your output folder in the file deadlines.xlsx",
+                         location=window_location)
+                continue
+            elif event == "-POSTING LIST-":
+                row = values['-POSTING LIST-']
+                if not isinstance(row, int):
+                    row = row[0]
+                selected_postings = postings.iloc[row, :].copy()
+                if selected_postings.shape[0] == 0:
+                    continue
+
+                changes = self.view_detailed_posting(
+                    selected_postings, window_location
+                )
+
+                if changes:
+                    all_postings = pd.read_pickle(self._postings_url)
+                    postings = filter_postings(all_postings, **layout_kwargs)
+                    table = table_from_postings(postings)
+                    new_layout = gen_layout(table, **layout_kwargs)
+                    window.close()
+                    window = gen_window(new_layout, size, window_location)
+            elif event in ['-EXPIRED-', '-ORDER-', '-MAYBE-', '-APPLIED=']:
+                layout_kwargs['maybe'] = values['-MAYBE-']
+                layout_kwargs['expired'] = values['-EXPIRED-']
+                layout_kwargs['applied'] = values['-APPLIED-']
+                layout_kwargs['sort_by'] = values['-ORDER-']
                 postings = filter_postings(all_postings, **layout_kwargs)
                 table = table_from_postings(postings)
                 new_layout = gen_layout(table, **layout_kwargs)
