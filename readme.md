@@ -57,10 +57,9 @@ collected updates and will allow you to accept or reject each update for each
 posting.
 
 4) To see your application deadline go to "View deadlines" there you will
-find all the postings you marked as interested or maybes. Note that some
-employers do a very bad job of marking the correct deadline in AEA and EJM, and
-some even don't write any. Often the correct deadline is in the full text. So
-it is recommended for you to review each deadline (particularly those that show
+find all the postings you marked as interested or maybes. Note that many postings
+have incorrect deadline in AEA and EJM. Often the correct deadline is in the full text. So
+it is recommended that you review each deadline (particularly those that show
 up as very far in the future). The system allows you to modify the deadline of
 each interested posting manually at this stage.
 
