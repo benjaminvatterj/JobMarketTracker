@@ -25,6 +25,10 @@ settings = {
     'today': datetime.date.today(),
     # Color theme for GUI (from PySimpleGui)
     'gui_theme': 'DarkTeal2',
+    # Custom setting path
+    'custom_settings': os.path.abspath(os.path.join(pwd, '../custom_settings.py')),
+    # Decide whether custom input settings are overriden or appended
+    'custom_overrides_default': False,
 }
 
 # == Input Type Configuration === #
@@ -160,30 +164,6 @@ input_option_settings = [
         'location_generator': country_state_city_aggregator,
         # list of columns renames that we dont want to store
         'to_drop': ['city', 'state', 'country'],
-    },
-    {
-        'origin': 'NUGoogleDocs',
-        'download_url': 'https://docs.google.com/spreadsheets/d/1c4hB5jqfKY6y6DcLF7Cpd6OOVlwhuKgWjKzOwU0kDYM/edit?usp=sharing',
-        'expected_extension': 'csv',
-        # A validator for the path given for the file to load
-        'url_validator': validator_generator(
-            [validate_extension], 'NUGoogleDocs', [('csv', 'NUGoogleDocs')]
-        ),
-        'input_file_name': 'latest_nu.csv',
-        'validator': validator_generator(
-            [validate_unique_id], 'NUGoogleDocs', [('ID', 'NUGoogleDocs')]
-        ),
-        'download_instructions': 'Download as CSV!',
-        'loader': pd.read_csv,
-        'renaming_rules': {
-            'ID': 'origin_id',
-            'Title': 'title',
-            'Institution': 'institution',
-            'Department': 'department',
-            'Deadline': 'deadline',
-            'URL': 'url'
-        },
-        'location_generator': (lambda x, y: 'unknown')
     },
     {
         'origin': 'AJO',

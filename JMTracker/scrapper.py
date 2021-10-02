@@ -200,14 +200,14 @@ class AJOScrapper(Scrapper):
         test = data['origin_id'].isna().any()
         if test:
             success = False
-            message = 'Failed to collect some ids for AOJ'
+            message = 'Failed to collect some ids for AJO'
             # store
-            path = os.path.join(settings['output_directory'], 'aoj_failures.csv')
+            path = os.path.join(settings['output_directory'], 'ajo_failures.csv')
             data.to_csv(path)
             return success, message
 
-        logging.info("Storing AOJ files to input")
-        path = os.path.join(settings['input_directory'], 'latest_aoj_postings.csv')
+        logging.info("Storing AJO files to input")
+        path = os.path.join(settings['input_directory'], 'latest_ajo_postings.csv')
         data.to_csv(path)
 
         return success, message
@@ -220,12 +220,12 @@ class AJOScrapper(Scrapper):
         -------
         None
         """
-        sg.popup("Downloading posting data from AOJ", location=window_location)
+        sg.popup("Downloading posting data from AJO", location=window_location)
         scrapper = AJOScrapper()
         success, message = scrapper.get_postings()
         if success:
             sg.popup("Done processing. The data should be in the input folder"
-                     " and called latest_aoj_postings.csv\n"
+                     " and called latest_ajo_postings.csv\n"
                      "Please review it and include it as with the other sources.",
                      location=window_location)
         else:

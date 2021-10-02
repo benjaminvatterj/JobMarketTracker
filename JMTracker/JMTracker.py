@@ -1,4 +1,5 @@
 import os
+import importlib
 import numpy as np
 from textwrap import dedent, shorten
 import pandas as pd
@@ -27,6 +28,33 @@ class Tracker():
         self._storage_dir = settings['storage_directory']
         if not os.path.isdir(self._storage_dir):
             os.mkdir(self._storage_dir)
+
+        custom_settings_url = settings['custom_settings']
+        self._input_option_settings = input_option_settings
+        if os.path.isfile(custom_settings_url):
+            spec = importlib.util.spec_from_file_location(
+                'settings', custom_settings_url
+            )
+            if spec is not None:
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+                if hasattr(module, 'settings'):
+                    # Update current setting
+                    custom_settings = module.settings
+                    settings.update(custom_settings)
+            spec = importlib.util.spec_from_file_location(
+                'input_option_settings', custom_settings_url
+            )
+            if spec is not None:
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+                if hasattr(module, 'input_option_settings'):
+                    # Update input option settings
+                    new_inputs = module.input_option_settings
+                    if not settings['custom_overrides_default']:
+                        self._input_option_settings += new_inputs
+                    else:
+                        self._input_option_settings = new_inputs.copy()
 
         # Set the GUI theme
         sg.theme(settings['gui_theme'])
@@ -153,12 +181,12 @@ class Tracker():
     def update_postings_gui(self, window_location=(None, None)):
         """Prompt to update files from AEA and EJM
         """
-        updated_origins = {x['origin']: False for x in input_option_settings}
+        updated_origins = {x['origin']: False for x in self._input_option_settings}
 
         def core_layout(updated_origins):
             """Produces the layout for the posting update"""
             mid_layouts = []
-            for source_setting in input_option_settings:
+            for source_setting in self._input_option_settings:
                 origin = source_setting['origin']
                 if updated_origins.get(origin, False):
                     mid_layouts.append(
@@ -169,7 +197,7 @@ class Tracker():
                     'expected_extension', None)
                 hint = 'hint: download from here'
                 if expected_extension is not None:
-                    hint = f'hind: download from here as {expected_extension}'
+                    hint = f'hint: download from here as {expected_extension}'
                 layout = [
                     [sg.Text(f"{origin} file: "), sg.Input(),
                      sg.FileBrowse(key=f"-IN-{origin}-")],
@@ -206,7 +234,7 @@ class Tracker():
                 break
             elif 'UPDATE' in event:
                 origin = event.split("-")[2]
-                source_setting = [x for x in input_option_settings if
+                source_setting = [x for x in self._input_option_settings if
                                   x['origin'] == origin][0]
 
                 url = values[f"-IN-{origin}-"]
@@ -226,7 +254,7 @@ class Tracker():
                                    location=window_location)
             elif 'LINK' in event:
                 origin = event.split("-")[2]
-                source_setting = [x for x in input_option_settings if
+                source_setting = [x for x in self._input_option_settings if
                                   x['origin'] == origin][0]
                 url = source_setting.get('download_url', None)
                 if url is not None:
@@ -243,7 +271,7 @@ class Tracker():
 
             elif 'HELP' in event:
                 origin = event.split("-")[2]
-                source_setting = [x for x in input_option_settings if
+                source_setting = [x for x in self._input_option_settings if
                                   x['origin'] == origin][0]
                 txt = source_setting['download_instructions']
                 sg.popup(txt, location=window_location)

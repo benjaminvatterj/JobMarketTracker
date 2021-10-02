@@ -13,6 +13,13 @@ What this currently doesnt do:
 - It doesn't allow you to filter postings before reviewing one by one (you can do this in the spreadsheets before inputing it to this app)
 - For now, it doesn't provide any management of interviewes. I hope to add those later.
 
+
+## Preview
+
+![update listings](./static/update_overview.png)
+
+![view deadlines](./static/deadlines_overview.png)
+
 ## Installation
 Simply clone/download this git and execute
 ```sh
