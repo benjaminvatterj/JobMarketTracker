@@ -17,7 +17,6 @@ What this currently doesnt do:
 ## Preview
 
 ![update listings](./static/update_overview.png)
-
 ![view deadlines](./static/deadlines_overview.png)
 
 ## Installation
@@ -51,7 +50,7 @@ This system does not provide any type of filtering, so if you want to exclude
 rows, you should do so manually in the XLS/CSV files. Once you're ready, set
 the location of each file in the finder, and click the update. The system will
 review each posting in each file and evaluate whether there are new postings or
-updates to existings ones. New postings will be added to your local new-posting
+updates to existing ones. New postings will be added to your local new-posting
 list, while updates will be added to your pending update review list.
 
 2) To manage new postings, go to "Review new postings" This will show each
@@ -70,16 +69,22 @@ it is recommended that you review each deadline (particularly those that show
 up as very far in the future). The system allows you to modify the deadline of
 each interested posting manually at this stage.
 
-## Adding sources (Advanced)
+## Customizing Inputs and Theme
 
-The system allows adding custom sources beyond AEA and EJM. Sources are added as
-dictionaries to the list variables input_option_settings in settings.py. Each source
+Tired of the retro wave look of the system? checkout custom_settings.py to change the color theme.
+
+Also, the system allows adding custom sources beyond AEA, EJM, and AJO. Sources are added as
+dictionaries to the list variables input_option_settings in custom_settings.py. Each source
 is a dictionary that must specify a number of mandatory keys, including a url
 for the source, the name of the source, and a function to read the
-data. See settings.py for further details and examples.
+data. See custom_settings.py for further details and examples.
 
 ## Help!
 Check the help button in the GUI for further instructions on how to use this app.
-Any issues, submit them through github
+Any issues, submit them through the issue tracker here on github.
+
+## Contributing
+To contribute to this effort please submit a pull request or contact me directly.
+
 
 
