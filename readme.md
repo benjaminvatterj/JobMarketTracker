@@ -38,7 +38,7 @@ Either follow the "install -r" method or run
 
 ```sh
 
-pip install --upgrade pandas xlrd PySimpleGui humanize numpy lxml humanize beautifulsoup4 requests
+pip install --upgrade pandas xlrd PySimpleGui humanize numpy lxml humanize beautifulsoup4 requests openpyxl
 
 ```
 
