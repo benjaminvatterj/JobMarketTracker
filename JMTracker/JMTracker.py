@@ -1767,7 +1767,7 @@ class Tracker():
                     new_layout = gen_layout(table, **layout_kwargs)
                     window.close()
                     window = gen_window(new_layout, size, window_location)
-            elif event in ['-EXPIRED-', '-ORDER-', '-MAYBE-', '-APPLIED=']:
+            elif event in ['-EXPIRED-', '-ORDER-', '-MAYBE-', '-APPLIED-']:
                 layout_kwargs['maybe'] = values['-MAYBE-']
                 layout_kwargs['expired'] = values['-EXPIRED-']
                 layout_kwargs['applied'] = values['-APPLIED-']
