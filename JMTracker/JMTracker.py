@@ -87,6 +87,7 @@ class Tracker():
             [sg.Text("Edit ignored postings:"), sg.Button("view", key="-IGNORED-")],
             [sg.Text("View deadlines:"), sg.Button("view", key="-DEADLINES-"),
              sg.Button("legacy view", key='-DEADLINES_OLD-')],
+            [sg.Text("Manage applications:"), sg.Button("view", key="-APPLICATIONS-")],
             [sg.Text("View help:"), sg.Button("view", key="-HELP-")],
             [sg.Button("Close")]
         ]
@@ -120,6 +121,10 @@ class Tracker():
             elif event == "-DEADLINES-":
                 window.close()
                 self.review_interested_gui(window_location)
+                return self.main_gui()
+            elif event == "-APPLICATIONS-":
+                window.close()
+                self.review_applications_gui(window_location)
                 return self.main_gui()
             elif event == "-UPDATES-":
                 window.close()
@@ -1014,8 +1019,6 @@ class Tracker():
             elif event == '-NOTES-':
                 logging.info("Got request to see notes")
                 continue
-            elif event == '-VISIT-':
-                webbrowser.open(url)
             elif event == "-FULL-":
                 self.large_text_popup(text, location=window_location)
             else:
@@ -1612,7 +1615,7 @@ class Tracker():
         # Prepare data
         if not os.path.isfile(self._postings_url):
             sg.popup_error("The postings files was not found. You must first "
-                           "update your postings before viewing ignored.",
+                           "update your postings before viewing interested postings.",
                            location=window_location)
             return
 
@@ -1721,7 +1724,7 @@ class Tracker():
         size = (None, None)
         postings = filter_postings(all_postings, sort_by=sort_by)
         if postings.shape[0] == 0:
-            sg.popup_error("You have not marked any posting as ignored"
+            sg.popup_error("You have not marked any posting as interested"
                            " so the list is empty.")
             return
         table = table_from_postings(postings)
@@ -1780,3 +1783,321 @@ class Tracker():
             else:
                 logging.info(f"Got unknown event {event} with values {values}")
         return
+
+    def review_applications_gui(self, window_location=(None, None)):
+        """Review ongoing applications and mark answers received
+
+        Parameters
+        ----------
+        window_location : tuple, optional
+            location in which to draw the window
+
+        Returns
+        -------
+        None
+
+        """
+        # Prepare data
+        if not os.path.isfile(self._postings_url):
+            sg.popup_error("The postings files was not found. You must first "
+                           "update your postings before viewing applications",
+                           location=window_location)
+            return
+
+        all_postings = pd.read_pickle(self._postings_url)
+        # filter applied
+        sel = all_postings['status'] == 'applied'
+        if not sel.any():
+            sg.popup_error(
+                "There aren't any postings marked as applied. To manage "
+                " applications first mark any posting as applied in the "
+                " deadline menu.",
+                location=window_location
+            )
+            return
+
+        order_cols = ['application_status', 'institution', 'title',
+                      'department', 'location']
+        posting_cols = ['application_status', 'institution', 'title',
+                        'department', 'location']
+
+        resolved_statuses = ['no interview', 'no flyout', 'no offer',
+                             'offer accepted', 'offer rejected']
+        # unresolved_statuses = ['got interview', 'got flyout',
+        #                        'got offer']
+
+        # Add the new columns if they don't exist
+        if 'application_status' not in all_postings.columns:
+            all_postings['application_status'] = ''
+            all_postings.loc[sel, 'application_status'] = 'awaiting response'
+            # overwrite if its a new column
+            all_postings.to_pickle(self._postings_url)
+
+        def filter_postings(all_postings, resolved=True, sort_by='institution'):
+            sel = all_postings['status'] == 'applied'
+            postings = all_postings.loc[sel, :].copy()
+            if not resolved:
+                sel = postings['application_status'].isin(resolved_statuses)
+                postings = postings.loc[~sel, :].copy()
+            postings.sort_values(by=sort_by, inplace=True)
+            return postings
+
+        def table_from_postings(postings, posting_cols=posting_cols):
+            # Ensure we have the right columns
+
+            postings = postings.copy()
+
+            columns = posting_cols
+            for col in columns:
+                postings[col].fillna('', inplace=True)
+                postings[col] = postings[col].astype(str)
+
+            # starting values
+            tbl = postings.loc[:, columns].values.tolist()
+            return tbl
+
+        def gen_layout(table, resolved=True,
+                       sort_by='institution', order_cols=order_cols):
+
+            columns = [x.replace('_', ' ').capitalize() for x in order_cols]
+            row_colors = None
+
+            dates_list_columns = [
+                [sg.Table(values=table, enable_events=True,
+                          headings=columns, key='-APPLICATION LIST-',
+                          auto_size_columns=True, expand_x=True,
+                          col_widths=[10, 50, 50, 50, 10],
+                          num_rows=20,
+                          expand_y=True, row_colors=row_colors)],
+                [sg.CB("show resolved", key="-RESOLVED-", default=resolved,
+                       enable_events=True),
+                 sg.Text("Sort by:"),
+                 sg.Combo(order_cols, default_value=sort_by,
+                          key='-ORDER-', enable_events=True)]
+            ]
+            header = [[sg.Text("Ongoing applications, "
+                               "click on an item to modify status")]]
+            footer = [[sg.Button("Close", key='-EXIT-'),
+                       sg.Button("Export to excel", key='-EXPORT-')]]
+
+            layout = [[header], [sg.HSeparator()],
+                      [sg.Column(dates_list_columns, key='-COL-')],
+                      [sg.HSeparator()], [footer]]
+            return layout
+
+        def gen_window(layout, size, location):
+            window = sg.Window('Awaiting applications', size=size, location=location,
+                               auto_size_text=True, auto_size_buttons=True,
+                               grab_anywhere=False, resizable=True,
+                               layout=layout, finalize=True)
+            window['-COL-'].expand(True, True)
+            window['-APPLICATION LIST-'].expand(True, True)
+            window['-APPLICATION LIST-'].table_frame.pack(expand=True, fill='both')
+            return window
+
+        sort_by = 'institution'
+        size = (None, None)
+        postings = filter_postings(all_postings, sort_by=sort_by)
+        if postings.shape[0] == 0:
+            sg.popup_error("You have not marked any posting as applied"
+                           " so the list is empty.")
+            return
+        table = table_from_postings(postings)
+        layout = gen_layout(table, sort_by=sort_by)
+        window = gen_window(layout, size, window_location)
+        layout_kwargs = {
+            'resolved': True,
+            'sort_by': sort_by,
+        }
+        while True:
+            event, values = window.read()
+            window_location = window.CurrentLocation(True)
+            size = window.size
+
+            if event == sg.WIN_CLOSED or event == '-EXIT-':
+                window.close()
+                break
+            elif event == '-EXPORT-':
+                url = os.path.join(self._output_dir, 'applications.xlsx')
+                postings.to_excel(url, index=False)
+                sg.popup("All currently filtered applications have been exported\n"
+                         "to your output folder in the file applications.xlsx",
+                         location=window_location)
+                continue
+            elif event == "-APPLICATION LIST-":
+                row = values['-APPLICATION LIST-']
+                if not isinstance(row, int):
+                    row = row[0]
+                selected_postings = postings.iloc[row, :].copy()
+                if selected_postings.shape[0] == 0:
+                    continue
+
+                changes = self.view_awaiting_application(
+                    selected_postings, window_location
+                )
+
+                if changes:
+                    all_postings = pd.read_pickle(self._postings_url)
+                    postings = filter_postings(all_postings, **layout_kwargs)
+                    table = table_from_postings(postings)
+                    new_layout = gen_layout(table, **layout_kwargs)
+                    window.close()
+                    window = gen_window(new_layout, size, window_location)
+            elif event in ['-RESOLVED-', '-ORDER-']:
+                layout_kwargs['resolved'] = values['-RESOLVED-']
+                layout_kwargs['sort_by'] = values['-ORDER-']
+                postings = filter_postings(all_postings, **layout_kwargs)
+                table = table_from_postings(postings)
+                new_layout = gen_layout(table, **layout_kwargs)
+                window.close()
+                window = gen_window(new_layout, size, window_location)
+            else:
+                logging.info(f"Got unknown event {event} with values {values}")
+        return
+
+    def view_awaiting_application(self, row, window_location=(None, None)):
+        """Review and edit a post as shown in the application menu
+
+        Parameters
+        ----------
+        row : Series
+             a row from the applications dataframe to review
+
+        Returns
+        -------
+        Status:
+            indicates whether any edit was done to the postings
+        """
+        status_change = False
+        font = 'Helvetica 12'
+
+        row = row.copy()
+        # unpack
+        section = row['section']
+        institution = row['institution']
+        division = row['division']
+        department = row['department']
+        title = row['title']
+        text = row['full_text']
+        location = row['location']
+        origin = row['origin']
+        url = row['url']
+        status = row['application_status']
+
+        layout = [
+            [sg.Text('Title:', font=font + ' underline'),
+             sg.Text(f'{title}', font=font),
+             sg.Text('Institution:', font=font + ' underline'),
+             sg.Text(f'{institution}', font=font)],
+            [sg.Text(f"{department} | {division} | {section} ")],
+            [sg.HSeparator()],
+            [sg.Text(f"Current status: {status}", font=font + ' bold')],
+            [sg.HSeparator()],
+            [sg.Text(f'Location: {location}')],
+            [sg.Text(f'Source: {origin}'), sg.Button('See posting', key='-VISIT-'),
+             sg.Button("See full text", key='-FULL-')],
+            [sg.HSeparator()],
+            [sg.Button("Close", key='-CLOSE-'),
+             sg.Button("Progress status", key="-PROGRESS-"),
+             sg.Button("Interrupt application", key='-INTERRUPT-'),
+             sg.Button("Revert status", key='-REGRESS-'),
+             ]
+        ]
+
+        # size = (600, 400)
+        window = sg.Window('Application status', layout, location=window_location)
+        while True:
+            event, values = window.read()
+            # update the window location
+            window_location = window.CurrentLocation(True)
+            if event == sg.WIN_CLOSED or event in ["-CLOSE-"]:
+                window.close()
+                break
+            elif event == '-VISIT-':
+                webbrowser.open(url)
+            elif event == "-PROGRESS-":
+                window.close()
+                status_change = True
+                ll = (window_location[0] + 300, window_location[1] + 200)
+                sg.popup_quick_message("Congrats!", location=ll,
+                                       font='Helvetica 16 bold',
+                                       auto_close_duration=2)
+                if status in ['awaiting response', 'no interview']:
+                    row['application_status'] = 'got interview'
+                elif status in ['got interview', 'no flyout']:
+                    row['application_status'] = 'got flyout'
+                elif status in ['got flyout', 'no offer']:
+                    row['application_status'] = 'got offer'
+                elif status in ['got offer', 'offer rejected']:
+                    row['application_status'] = 'offer accepted'
+                break
+            elif event == "-INTERRUPT-":
+                window.close()
+                status_change = True
+                if status == 'awaiting response':
+                    row['application_status'] = 'no interview'
+                elif status == 'got interview':
+                    row['application_status'] = 'no flyout'
+                elif status == 'got flyout':
+                    row['application_status'] = 'no offer'
+                elif status == 'got offer':
+                    row['application_status'] = 'offer rejected'
+                break
+            elif event == "-REGRESS-":
+                window.close()
+                status_change = True
+                if status == 'got interview':
+                    row['application_status'] = 'awaiting response'
+                elif status == 'got flyout':
+                    row['application_status'] = 'got interview'
+                elif status == 'got offer':
+                    row['application_status'] = 'got flyout'
+                elif status == 'offer accepted':
+                    row['application_status'] = 'got offer'
+                break
+            elif event == "-FULL-":
+                self.large_text_popup(text, location=window_location)
+            else:
+                logging.warning(f"Got unkown event {event}")
+
+        if status_change:
+            # Update
+            postings = pd.read_pickle(self._postings_url)
+            sel = (postings['origin'] == row['origin']) & \
+                (postings['origin_id'] == row['origin_id'])
+            if not sel.any():
+                logging.warning(
+                    f"Failed to find a match for row {row} in postings")
+                os.popup_error("Failed to match update row to postings. Is the "
+                               " postings file corrupt?")
+                status_change = False
+                return status_change
+            if sel.sum() > 1:
+                logging.warning("Single row selected multiple lines in postings.\n"
+                                "this suggests a corrupted postings file.\n"
+                                f"requested: {row}\n got \n {postings.loc[sel, :]}")
+                os.popup_error("Failed to match update row to postings. Is the "
+                               " postings file corrupt?")
+                status_change = False
+                return status_change
+
+            ix = postings.loc[sel, :].index.values[0]
+            row = row.to_frame().T
+            row.index = [ix]
+            # Test one more time to be sure
+            test = (postings.loc[sel, 'origin'] == row['origin']) & \
+                (postings.loc[sel, 'origin_id'] == row['origin_id'])
+            if not test.all():
+                logging.warning("Failed to match the row with the data. "
+                                " This suggests a corrupted postings file."
+                                f"requested: {row}\n got \n {postings.loc[sel, :]}")
+                os.popup_error("Failed to match update row to postings. Is the "
+                               " postings file corrupt?")
+                status_change = False
+                return status_change
+
+            row = row.loc[:, ['application_status', 'deadline']]
+            postings.update(row)
+            postings.to_pickle(self._postings_url)
+
+        return status_change
