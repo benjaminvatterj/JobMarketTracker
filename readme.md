@@ -7,11 +7,14 @@ This is a small package to manage applications for the job market. It does the f
 - Allows you to manage deadlines for applications so that you don't miss anything important
 - Allows you to manage updates to old postings
 - Detects which postings are new and which ones you've already seen
+- Manages application status and letters received
+- Allows you to customize posting details, take notes, and organize them according to custom columns
+- Automates the creation of application folders by copying a default one
 
 What this currently doesnt do:
 - It won't download the posting files for you (or scrape anything)
 - It doesn't allow you to filter postings before reviewing one by one (you can do this in the spreadsheets before inputing it to this app)
-- For now, it doesn't provide any management of interviewes. I hope to add those later.
+- For now, it doesn't provide any management of interviewes.
 
 
 ## Preview

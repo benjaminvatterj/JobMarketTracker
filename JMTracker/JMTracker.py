@@ -1,4 +1,6 @@
 import os
+from distutils.dir_util import copy_tree
+import pickle
 import importlib
 import numpy as np
 from textwrap import dedent, shorten
@@ -70,6 +72,26 @@ class Tracker():
                          f"{self._postings_url}.")
             self._first_run = True
 
+        # Check if we have the settings file
+        self._personal_settings_url = os.path.join(
+            self._storage_dir, "personal_settings.pkl"
+        )
+        if not os.path.isfile(self._personal_settings_url):
+            logging.info(
+                "No personal setting file found. Creating a default one")
+            self._personal_settings = {
+                'custom_posting_cols': [],
+                'custom_application_cols': [],
+                'letters': [],
+                'scaffolding_base': None,
+                'scaffolding_output_dir': None
+            }
+            with open(self._personal_settings_url, 'wb') as handle:
+                pickle.dump(self._personal_settings, handle)
+        else:
+            with open(self._personal_settings_url, 'rb') as handle:
+                self._personal_settings = pickle.load(handle)
+
         self._pending_updates_url = os.path.join(
             self._storage_dir, 'updates_pending_review.pkl'
         )
@@ -84,10 +106,12 @@ class Tracker():
             [sg.Text("Manual entry:"), sg.Button("view", key='-MANUAL-')],
             [sg.Text("Review new postings:"), sg.Button("new", key="-NEW-")],
             [sg.Text("Manage updates:"), sg.Button("view", key="-UPDATES-")],
-            [sg.Text("Edit ignored postings:"), sg.Button("view", key="-IGNORED-")],
-            [sg.Text("View deadlines:"), sg.Button("view", key="-DEADLINES-"),
-             sg.Button("legacy view", key='-DEADLINES_OLD-')],
-            [sg.Text("Manage applications:"), sg.Button("view", key="-APPLICATIONS-")],
+            [sg.Text("Edit ignored postings:"),
+             sg.Button("view", key="-IGNORED-")],
+            [sg.Text("View deadlines:"), sg.Button("view", key="-DEADLINES-")],
+            [sg.Text("Manage applications:"), sg.Button(
+                "view", key="-APPLICATIONS-")],
+            [sg.Text("Settings:"), sg.Button("view", key="-SETTINGS-")],
             [sg.Text("View help:"), sg.Button("view", key="-HELP-")],
             [sg.Button("Close")]
         ]
@@ -114,10 +138,6 @@ class Tracker():
                 window.close()
                 self.manual_entry(window_location)
                 return self.main_gui()
-            elif event == "-DEADLINES_OLD-":
-                window.close()
-                self.view_deadlines(window_location)
-                return self.main_gui()
             elif event == "-DEADLINES-":
                 window.close()
                 self.review_interested_gui(window_location)
@@ -125,6 +145,10 @@ class Tracker():
             elif event == "-APPLICATIONS-":
                 window.close()
                 self.review_applications_gui(window_location)
+                return self.main_gui()
+            elif event == "-SETTINGS-":
+                window.close()
+                self.set_configuration_gui(window_location)
                 return self.main_gui()
             elif event == "-UPDATES-":
                 window.close()
@@ -554,7 +578,8 @@ class Tracker():
             url = row['url']
             origin_id = row['origin_id']
             action_list = [
-                sg.Button("Skip"), sg.Button("Interested"), sg.Button("Ignore"),
+                sg.Button("Skip"), sg.Button(
+                    "Interested"), sg.Button("Ignore"),
                 sg.Button("Maybe"), sg.Button("Stop Review", key='-CLOSE-')
             ]
             if allow_delete:
@@ -605,7 +630,7 @@ class Tracker():
                     break
                 elif event == 'DELETE':
                     res = sg.popup_ok_cancel(
-                        "Are you sure you wish to delte this posting?",
+                        "Are you sure you wish to delete this posting?",
                         location=window_location
                     )
                     if res == 'OK':
@@ -652,7 +677,8 @@ class Tracker():
             return
 
         all_postings = pd.read_pickle(self._postings_url)
-        posting_cols = ['institution', 'title', 'status']
+        posting_cols = ['institution', 'title', 'status'] + \
+            self._personal_settings['custom_posting_cols']
 
         def filter_postings(all_postings, maybe=True, expired=True, applied=False):
             status = ['interested']
@@ -934,6 +960,7 @@ class Tracker():
         origin = row['origin']
         url = row['url']
         status = row['status']
+        notes = row['notes']
         alt_status = 'maybe'
         alt_status_txt = alt_status
         if status == 'maybe':
@@ -943,36 +970,58 @@ class Tracker():
             alt_status_txt = 'not applied'
             alt_status = 'interested'
 
+        update_list = ['title', 'institution', 'division', 'section',
+                       'department', 'deadline', 'location']
+
+        custom_cols = [[sg.Text("Custom columns:")]]
+        for col in self._personal_settings['custom_posting_cols']:
+            crow = [sg.Text(f"{col}:"), sg.InputText(row[col], key=col)]
+            custom_cols.append(crow)
+            update_list.append(col)
+        if len(self._personal_settings['custom_posting_cols']) == 0:
+            custom_cols.append([sg.Text("you can add columns in the "
+                                        "configuration menu")])
+
         alt_status = 'maybe' if status == 'interested' else 'interested'
+        footer = [
+            sg.Button("Close", key='-CLOSE-'),
+            sg.Button(f"Mark as {alt_status_txt}", key="-SWITCH-"),
+            sg.Button("Mark as Applied", key='-APPLIED-'),
+            sg.Button("Remove from deadlines", key='-IGNORE-'),
+            sg.Button("Update posting", key='-UPDATE-'),
+            sg.Button("Edit/View Notes", key='-NOTES-'),
+            sg.Button("Create application folder", key="-FOLDER-")
+        ]
         layout = [
             [sg.Text('Title:', font=font + ' underline'),
-             sg.Text(f'{title}', font=font),
+             sg.InputText(default_text=f'{title}', font=font, key='title'),
              sg.Text('Institution:', font=font + ' underline'),
-             sg.Text(f'{institution}', font=font)],
-            [sg.Text(f"{department} | {division} | {section} ")],
+             sg.InputText(default_text=f'{institution}', font=font,
+                          key='institution')],
+            [sg.InputText(f"{department}", key="department"),
+             sg.Text(" | "),
+             sg.InputText(f"{division}", key="division"),
+             sg.Text(" | "),
+             sg.InputText(f"{section}", key="section")],
             [sg.HSeparator()],
             [sg.Text(f"Current status: {status}")],
-            [sg.Text(f'Location: {location}')],
+            [sg.Text('Location'), sg.InputText(f"{location}", key='location')],
             [sg.Text('Deadline:'),
-             sg.Input(deadline, key='-IN-DEADLINE-', size=(20, 1)),
+             sg.Input(deadline, key='deadline', size=(20, 1)),
              sg.CalendarButton('select deadline', close_when_date_chosen=True,
-                               target='-IN-DEADLINE-', location=window_location,
+                               target='deadline', location=window_location,
                                no_titlebar=False)],
             [sg.Text(f'keywords: {keywords}')],
             [sg.Text(f'Source: {origin}'), sg.Button('See posting', key='-VISIT-'),
              sg.Button("See full text", key='-FULL-')],
+            [sg.HSeparator()]
+        ] + custom_cols + [
             [sg.HSeparator()],
-            [sg.Button("Close", key='-CLOSE-'),
-             sg.Button(f"Mark as {alt_status_txt}", key="-SWITCH-"),
-             sg.Button("Mark as Applied", key='-APPLIED-'),
-             sg.Button("Remove from deadlines", key='-IGNORE-'),
-             sg.Button("Update deadline", key='-DEADLINE-'),
-             # FIXME: implement
-             # sg.Button("Edit/View Notes", key='-NOTES-')
-             ]
+            footer
         ]
 
         # size = (600, 400)
+        modified_cols = []
         window = sg.Window('New posting', layout, location=window_location)
         while True:
             event, values = window.read()
@@ -1003,24 +1052,58 @@ class Tracker():
                     window.close()
                     row['status'] = 'ignore'
                     break
-            elif event == '-DEADLINE-':
-                new_deadline = values['-IN-DEADLINE-']
-                new_deadline = (
-                    pd.to_datetime(new_deadline)
-                    .to_pydatetime().date().__str__()
-                )
-                # Note: this is a patch for those already using the system
-                if 'original_deadline' not in row.index:
-                    row['original_deadline'] = deadline
-                row['deadline'] = new_deadline
-                status_change = True
+            elif event == '-UPDATE-':
+                for col in update_list:
+                    if col == 'deadline':
+                        new_deadline = values['deadline']
+                        if new_deadline != deadline:
+                            modified_cols.append('deadline')
+                            new_deadline = (
+                                pd.to_datetime(new_deadline)
+                                .to_pydatetime().date().__str__()
+                            )
+                            # Note: this is a patch for those already using the system
+                            if 'original_deadline' not in row.index:
+                                row['original_deadline'] = deadline
+                            row['deadline'] = new_deadline
+                            status_change = True
+                    else:
+                        new_val = values[col].strip()
+                        if new_val != row[col]:
+                            modified_cols.append(col)
+                            row[col] = new_val
+                            status_change = True
+
                 window.close()
                 break
-            elif event == '-NOTES-':
-                logging.info("Got request to see notes")
-                continue
             elif event == "-FULL-":
                 self.large_text_popup(text, location=window_location)
+            elif event == "-NOTES-":
+                changed, notes = self.modify_notes(
+                    notes, location=window_location)
+                if changed:
+                    row['notes'] = notes
+                    status_change = True
+                    modified_cols.append('notes')
+            elif event == "-FOLDER-":
+                base = self._personal_settings['scaffolding_base']
+                out_dir = self._personal_settings['scaffolding_output_dir']
+                if base is None or out_dir is None:
+                    sg.popup_error("To crate a folder you must first configure"
+                                   " the scaffolding paths in the configuration menu")
+                    continue
+                
+                name = sg.popup_get_text("Select a name for the application folder",
+                                         title="Application scaffolding",
+                                         location=window_location)
+                url = os.path.join(out_dir, name)
+                if os.path.isdir(url):
+                    sg.popup_error(f"The folder path {url}\n"
+                                   "is already in use")
+                    continue
+                copy_tree(base, url)
+                sg.popup(f"Application folder created successfuly at {url}")
+                continue
             else:
                 logging.warning(f"Got unkown event {event}")
 
@@ -1060,7 +1143,9 @@ class Tracker():
                 status_change = False
                 return status_change
 
-            row = row.loc[:, ['status', 'deadline']]
+            modified_cols = list(set(modified_cols))
+            row = row.loc[:, ['status'] + modified_cols]
+            logging.info(f"Modifying row to \n{row}")
             postings.update(row)
             postings.to_pickle(self._postings_url)
 
@@ -1334,12 +1419,6 @@ class Tracker():
 
         return status_change
 
-    def review_ignored(self):
-        return
-
-    def review_interested(self):
-        return
-
     def manual_entry(self, window_location=(None, None)):
         """Manual entry menu for a new postings
 
@@ -1599,7 +1678,6 @@ class Tracker():
                 logging.info(f"Got unknown event {event} with values {values}")
         return
 
-
     def review_interested_gui(self, window_location=(None, None)):
         """Review postings marked as interested and change their status
 
@@ -1621,9 +1699,11 @@ class Tracker():
 
         all_postings = pd.read_pickle(self._postings_url)
         order_cols = ['status', 'institution', 'title',
-                      'department', 'location', 'deadline']
+                      'department', 'location', 'deadline'] + \
+            self._personal_settings['custom_posting_cols']
         posting_cols = ['status', 'institution', 'title',
-                        'department', 'location', 'time_left']
+                        'department', 'location', 'time_left'] + \
+            self._personal_settings['custom_posting_cols']
 
         def filter_postings(postings, maybe=False, applied=False,
                             expired=False, sort_by='deadline'):
@@ -1764,10 +1844,17 @@ class Tracker():
                 )
 
                 if changes:
+                    order_cols = ['status', 'institution', 'title',
+                                  'department', 'location', 'deadline'] + \
+                        self._personal_settings['custom_posting_cols']
+                    posting_cols = ['status', 'institution', 'title',
+                                    'department', 'location', 'time_left'] + \
+                        self._personal_settings['custom_posting_cols']
                     all_postings = pd.read_pickle(self._postings_url)
                     postings = filter_postings(all_postings, **layout_kwargs)
-                    table = table_from_postings(postings)
-                    new_layout = gen_layout(table, **layout_kwargs)
+                    table = table_from_postings(postings, posting_cols)
+                    new_layout = gen_layout(table, order_cols=order_cols,
+                                            **layout_kwargs)
                     window.close()
                     window = gen_window(new_layout, size, window_location)
             elif event in ['-EXPIRED-', '-ORDER-', '-MAYBE-', '-APPLIED-']:
@@ -1776,8 +1863,9 @@ class Tracker():
                 layout_kwargs['applied'] = values['-APPLIED-']
                 layout_kwargs['sort_by'] = values['-ORDER-']
                 postings = filter_postings(all_postings, **layout_kwargs)
-                table = table_from_postings(postings)
-                new_layout = gen_layout(table, **layout_kwargs)
+                table = table_from_postings(postings, posting_cols)
+                new_layout = gen_layout(table, order_cols=order_cols,
+                                        **layout_kwargs)
                 window.close()
                 window = gen_window(new_layout, size, window_location)
             else:
@@ -1805,6 +1893,12 @@ class Tracker():
             return
 
         all_postings = pd.read_pickle(self._postings_url)
+        # verify we have the new "letters_recieved" columns
+        if 'letters_recieved' not in all_postings.columns:
+            all_postings['letters_recieved'] = ''
+            all_postings['letters_status'] = ''
+            all_postings.to_pickle(self._postings_url)
+
         # filter applied
         sel = all_postings['status'] == 'applied'
         if not sel.any():
@@ -1817,9 +1911,9 @@ class Tracker():
             return
 
         order_cols = ['application_status', 'institution', 'title',
-                      'department', 'location']
+                      'department', 'location', 'letters_status']
         posting_cols = ['application_status', 'institution', 'title',
-                        'department', 'location']
+                        'department', 'location', 'letters_status']
 
         resolved_statuses = ['no interview', 'no flyout', 'no offer',
                              'offer accepted', 'offer rejected']
@@ -1892,7 +1986,8 @@ class Tracker():
                                layout=layout, finalize=True)
             window['-COL-'].expand(True, True)
             window['-APPLICATION LIST-'].expand(True, True)
-            window['-APPLICATION LIST-'].table_frame.pack(expand=True, fill='both')
+            window['-APPLICATION LIST-'].table_frame.pack(
+                expand=True, fill='both')
             return window
 
         sort_by = 'institution'
@@ -1983,6 +2078,19 @@ class Tracker():
         origin = row['origin']
         url = row['url']
         status = row['application_status']
+        letters_recieved = row['letters_recieved']
+
+        writers = self._personal_settings['letters']
+        letters = [[sg.Text("Recommendation letters received:")]]
+        if len(writers) == 0:
+            letters.append([sg.Text("you can add letter writers in "
+                                    "the configuration file")])
+        for n, writer in enumerate(writers):
+            letter_status = writer in letters_recieved
+            letters.append([sg.Text(writer), sg.CB("Received", key=f"-L-{n}",
+                                                   default=letter_status,
+                                                   enable_events=True)])
+
 
         layout = [
             [sg.Text('Title:', font=font + ' underline'),
@@ -1992,6 +2100,8 @@ class Tracker():
             [sg.Text(f"{department} | {division} | {section} ")],
             [sg.HSeparator()],
             [sg.Text(f"Current status: {status}", font=font + ' bold')],
+            [sg.HSeparator()],
+            letters,
             [sg.HSeparator()],
             [sg.Text(f'Location: {location}')],
             [sg.Text(f'Source: {origin}'), sg.Button('See posting', key='-VISIT-'),
@@ -2005,7 +2115,8 @@ class Tracker():
         ]
 
         # size = (600, 400)
-        window = sg.Window('Application status', layout, location=window_location)
+        window = sg.Window('Application status', layout,
+                           location=window_location)
         while True:
             event, values = window.read()
             # update the window location
@@ -2057,6 +2168,17 @@ class Tracker():
                 break
             elif event == "-FULL-":
                 self.large_text_popup(text, location=window_location)
+            elif '-L-' in event:
+                received = []
+                for num, writer in enumerate(writers):
+                    stat = values[f'-L-{num}']
+                    if stat:
+                        received.append(writer)
+                received.sort()
+                row['letters_recieved'] = ",".join(received)
+                num_s = f"{len(received):d}/{len(writers):d}"
+                row['letters_status'] = num_s
+                status_change = True
             else:
                 logging.warning(f"Got unkown event {event}")
 
@@ -2096,8 +2218,250 @@ class Tracker():
                 status_change = False
                 return status_change
 
-            row = row.loc[:, ['application_status', 'deadline']]
+            row = row.loc[:, ['application_status', 'deadline', 'letters_recieved',
+                              'letters_status']]
             postings.update(row)
             postings.to_pickle(self._postings_url)
 
         return status_change
+
+    def set_configuration_gui(self, window_location=(None, None)):
+        """A window to set basic configuration
+
+        Parameters
+        ----------
+        window_location : tuple, optional
+            window location
+
+        Returns
+        -------
+        None
+        """
+
+        def gen_layout():
+            letters = []
+            if len(self._personal_settings['letters']) > 0:
+                for n, letter in enumerate(self._personal_settings['letters']):
+                    row = [
+                        sg.InputText(default_text=letter, key=f"-LETTER-{n}-"),
+                        sg.Button("Update", key=f"-UPDATE-LETTER-{n}"),
+                        sg.Button("Delete", key=f"-DELETE-LETTER-{n}")
+                    ]
+                    letters.append(row)
+            letters.append([sg.InputText(key="-LETTER-NEW-"),
+                            sg.Button("Add", key="-ADD-LETTER-")])
+
+            posting_cols = []
+            for n, col in enumerate(self._personal_settings['custom_posting_cols']):
+                row = [
+                    sg.Text(col),
+                    sg.Button("Delete", key=f"-DELETE-PC-{n}")
+                ]
+                posting_cols.append(row)
+
+            posting_cols.append([sg.InputText(key="-PC-NEW-"),
+                                 sg.Button("Add", key="-ADD-PC-")])
+
+            scaf_in = "None selected"
+            if self._personal_settings['scaffolding_base'] is not None:
+                scaf_in = self._personal_settings['scaffolding_base']
+
+            scaf_out = "None selected"
+            if self._personal_settings['scaffolding_output_dir'] is not None:
+                scaf_out = self._personal_settings['scaffolding_output_dir']
+
+            layout = [
+                [sg.Text("Letter Writers:")],
+                letters,
+                [sg.HSeparator()],
+                [sg.Text("Application scaffolding:")],
+                [sg.Text("Folder to copy:"),
+                 sg.Input(default_text=scaf_in, key='-SCAF-IN-'),
+                 sg.FolderBrowse(key="-SCAF-IN-BROWSE-"),
+                 sg.Button("Update", key="-SCAF-IN-UPDATE-")],
+                [sg.Text("Base folder for application:"),
+                 sg.Input(default_text=scaf_out, key='-SCAF-OUT-'),
+                 sg.FolderBrowse(key="-SCAF-OUT-BROWSE-"),
+                 sg.Button("Update", key="-SCAF-OUT-UPDATE-")],
+                [sg.HSeparator()],
+                [sg.Text("Custom posting columns:")],
+                posting_cols,
+                [sg.HSeparator()],
+                [sg.Button("Close", key="-CLOSE-")]
+            ]
+            return layout
+
+        def save_setting():
+            with open(self._personal_settings_url, 'wb') as handle:
+                pickle.dump(self._personal_settings, handle)
+            return
+
+        layout = gen_layout()
+        window = sg.Window('Personal Settings', layout,
+                           location=window_location)
+        while True:
+            event, values = window.read()
+            # update the window location
+            window_location = window.CurrentLocation(True)
+            if event == sg.WIN_CLOSED or event == '-CLOSE-':
+                window.close()
+                break
+            elif event == "-SCAF-IN-UPDATE-":
+                val = values['-SCAF-IN-']
+                if val == 'None selected':
+                    continue
+                elif not os.path.isdir(val):
+                    sg.popup_error(f"The scaffolding base folder {val} could "
+                                   "not be found")
+                    continue
+                else:
+                    self._personal_settings['scaffolding_base'] = val
+                    save_setting()
+                    window.close()
+                    layout = gen_layout()
+                    window = sg.Window('Personal Settings', layout,
+                                       location=window_location)
+                    continue
+            elif event == "-SCAF-OUT-UPDATE-":
+                val = values['-SCAF-OUT-']
+                if val == 'None selected':
+                    continue
+                elif not os.path.isdir(val):
+                    sg.popup_error(f"The scaffolding output folder {val} could "
+                                   "not be found")
+                    continue
+                else:
+                    self._personal_settings['scaffolding_output_dir'] = val
+                    save_setting()
+                    window.close()
+                    layout = gen_layout()
+                    window = sg.Window('Personal Settings', layout,
+                                       location=window_location)
+                    continue
+            elif event == "-ADD-LETTER-":
+                val = values['-LETTER-NEW-'].strip()
+                if len(val) == 0:
+                    sg.popup_error("Letter writer name must be non-empty")
+                    continue
+                else:
+                    self._personal_settings['letters'].append(val)
+                    save_setting()
+                    window.close()
+                    layout = gen_layout()
+                    window = sg.Window('Personal Settings', layout,
+                                       location=window_location)
+                    continue
+            elif '-UPDATE-LETTER' in event:
+                num = int(event.split('-')[-1])
+                val = values[f'-LETTER-{num:d}-'].strip()
+                self._personal_settings['letters'][num] = val
+                save_setting()
+                window.close()
+                layout = gen_layout()
+                window = sg.Window('Personal Settings', layout,
+                                   location=window_location)
+                continue
+            elif '-DELETE-LETTER' in event:
+                num = int(event.split('-')[-1])
+                letters = self._personal_settings['letters'].copy()
+                del letters[num]
+                self._personal_settings['letters'] = letters
+                save_setting()
+                window.close()
+                layout = gen_layout()
+                window = sg.Window('Personal Settings', layout,
+                                   location=window_location)
+                continue
+            elif event == "-ADD-PC-":
+                val = values['-PC-NEW-'].strip()
+                if len(val) == 0:
+                    sg.popup_error("column name must be non-empty")
+                    continue
+                else:
+                    # Validate its not taken
+                    all_postings = pd.read_pickle(self._postings_url)
+                    if val in all_postings.columns:
+                        sg.popup_error(f"column name {val} already in use")
+                        continue
+                    all_postings[val] = ''
+                    all_postings.to_pickle(self._postings_url)
+                    self._personal_settings['custom_posting_cols'].append(val)
+                    save_setting()
+                    window.close()
+                    layout = gen_layout()
+                    window = sg.Window('Personal Settings', layout,
+                                       location=window_location)
+                    continue
+            elif '-DELETE-PC-' in event:
+                num = int(event.split('-')[-1])
+                letters = self._personal_settings['custom_posting_cols'].copy()
+                val = letters[num]
+                res = sg.popup_ok_cancel(
+                    f"Are you sure you wish to delete this column ({val})?\n"
+                    "ALL information related to this column will be "
+                    "deleted permanently",
+                    location=window_location
+                )
+                if res == 'OK':
+                    all_postings = pd.read_pickle(self._postings_url)
+                    all_postings.drop(val, axis=1, inplace=True)
+                    all_postings.to_pickle(self._postings_url)
+
+                    del letters[num]
+                    self._personal_settings['custom_posting_cols'] = letters
+                    save_setting()
+                    window.close()
+                    layout = gen_layout()
+                    window = sg.Window('Personal Settings', layout,
+                                       location=window_location)
+
+        return
+
+    def modify_notes(self, notes, location=(None, None)):
+        """show and update posting notes
+
+        Parameters
+        ----------
+        notes : str
+        location: tuple
+
+        Returns
+        -------
+        changed : bool
+            whether the new notes are different from the previous
+        notes: str
+            new set of notes
+        """
+        layout = [
+            [sg.Text("Custom Notes:")],
+            [sg.Multiline(notes, enter_submits=False, autoscroll=True, key='notes',
+                          auto_size_text=True)],
+            [sg.Button("Close", key='-SAVE-'),
+             sg.Button("Close without saving", key="-CLOSE-")]
+        ]
+        window = sg.Window("Notes", layout, location=location,
+                           auto_size_text=True, auto_size_buttons=True,
+                           grab_anywhere=False, resizable=True,
+                           finalize=True)
+        window['notes'].expand(True, True)
+        while True:
+            event, value = window.read()
+            window_location = window.CurrentLocation(True)
+            if event == sg.WIN_CLOSED or event in ["-CLOSE-"]:
+                val = value['notes']
+                if val != notes:
+                    res = sg.popup_ok_cancel(
+                        "Closing without saving. Please confirm",
+                        location=window_location
+                    )
+                    if res == 'OK' or res is None:
+                        window.close()
+                        break
+                else:
+                    window.close()
+                    break
+            elif event == '-SAVE-':
+                window.close()
+                return True, value['notes']
+
+        return False, notes
