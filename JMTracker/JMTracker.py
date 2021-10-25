@@ -1928,13 +1928,20 @@ class Tracker():
             all_postings.to_pickle(self._postings_url)
         else:
             # Check if any application became applied and has no status
-            sel2 = sel & (all_postings['application_status'] == '')
+            sel2 = sel & (
+                (all_postings['application_status'] == '') |
+                (all_postings['application_status'].isna())
+            )
             all_postings.loc[sel2, 'application_status'] = 'awaiting response'
             # and the same for the letter status
-            sel2 = sel & (all_postings['letters_recieved'] == '')
+            sel2 = sel & (
+                (all_postings['letters_recieved'] == '') |
+                (all_postings['letters_recieved'].isna())
+            )
             writers = self._personal_settings['letters']
             num_let = len(writers)
             all_postings.loc[sel2, 'letters_status'] = f'0/{num_let:d}'
+            all_postings.loc[sel2, 'letters_recieved'] = ''
 
             all_postings.to_pickle(self._postings_url)
 
