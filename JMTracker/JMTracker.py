@@ -1926,6 +1926,17 @@ class Tracker():
             all_postings.loc[sel, 'application_status'] = 'awaiting response'
             # overwrite if its a new column
             all_postings.to_pickle(self._postings_url)
+        else:
+            # Check if any application became applied and has no status
+            sel2 = sel & (all_postings['application_status'] == '')
+            all_postings.loc[sel2, 'application_status'] = 'awaiting response'
+            # and the same for the letter status
+            sel2 = sel & (all_postings['letters_recieved'] == '')
+            writers = self._personal_settings['letters']
+            num_let = len(writers)
+            all_postings.loc[sel2, 'letters_status'] = f'0/{num_let:d}'
+
+            all_postings.to_pickle(self._postings_url)
 
         def filter_postings(all_postings, resolved=True, sort_by='institution'):
             sel = all_postings['status'] == 'applied'
