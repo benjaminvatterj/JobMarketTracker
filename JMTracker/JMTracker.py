@@ -1590,6 +1590,7 @@ class Tracker():
             columns = ['Source', 'Institution',
                        'Title', 'Department', 'Location', 'Deadline']
             row_colors = None
+            num_rows = len(table)
 
             dates_list_columns = [
                 [sg.Table(values=table, enable_events=True,
@@ -1606,7 +1607,7 @@ class Tracker():
                            'location'], default_value=sort_by,
                           key='-ORDER-', enable_events=True)]
             ]
-            header = [[sg.Text("Ignored postings, click on an item to review"
+            header = [[sg.Text(f"{num_rows:d} ignored postings, click on an item to review"
                                " and modify status")]]
             footer = [[sg.Button("Close", key='-EXIT-')]]
 
@@ -1725,6 +1726,7 @@ class Tracker():
                 )
                 postings = postings.loc[sel, :].copy()
             postings.sort_values(by=sort_by, inplace=True)
+            logging.info(f"Filtered to {postings.shape[0]:d} posting rows")
             return postings
 
         def table_from_postings(postings, posting_cols=posting_cols):
@@ -1762,6 +1764,7 @@ class Tracker():
             columns = [x.capitalize() for x in order_cols]
             row_colors = None
 
+            num_rows = len(table)
             dates_list_columns = [
                 [sg.Table(values=table, enable_events=True,
                           headings=columns, key='-POSTING LIST-',
@@ -1779,7 +1782,7 @@ class Tracker():
                  sg.Combo(order_cols, default_value=sort_by,
                           key='-ORDER-', enable_events=True)]
             ]
-            header = [[sg.Text("Postings marked as interested, "
+            header = [[sg.Text(f"{num_rows:d} postings marked as interested, "
                                "click on an item to review"
                                " and modify status")]]
             footer = [[sg.Button("Close", key='-EXIT-'),
@@ -1973,6 +1976,7 @@ class Tracker():
 
             columns = [x.replace('_', ' ').capitalize() for x in order_cols]
             row_colors = None
+            num_rows = len(table)
 
             dates_list_columns = [
                 [sg.Table(values=table, enable_events=True,
@@ -1987,7 +1991,7 @@ class Tracker():
                  sg.Combo(order_cols, default_value=sort_by,
                           key='-ORDER-', enable_events=True)]
             ]
-            header = [[sg.Text("Ongoing applications, "
+            header = [[sg.Text(f"{num_rows:d} ongoing applications, "
                                "click on an item to modify status")]]
             footer = [[sg.Button("Close", key='-EXIT-'),
                        sg.Button("Export to excel", key='-EXPORT-')]]
