@@ -83,7 +83,7 @@ input_option_settings = [
         # The origin file
         'origin': 'AEA',
         # The url to link to for file download
-        'download_url': 'https://www.aeaweb.org/joe/listings?issue=2021-02',
+        'download_url': 'https://www.aeaweb.org/joe/listings?issue=2022-02',
         # Excepcted extension, lower-case no period
         'expected_extension': 'xls',
         # Instructions to show user

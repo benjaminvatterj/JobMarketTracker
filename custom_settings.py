@@ -73,25 +73,24 @@ Also, 'origin_id' must be unique within each source, such that the tuple
 See the example below for more details or look at the original
 setting file within the project folder
 
-"""
 
 input_option_settings = [
     {
         # Name for the origin
-        'origin': 'NUGoogleDocs',
+        'origin': 'CustomDocs',
         # Download url
-        'download_url': 'https://docs.google.com/spreadsheets/d/1c4hB5jqfKY6y6DcLF7Cpd6OOVlwhuKgWjKzOwU0kDYM/edit?usp=sharing',
+        'download_url': '..',
         # Expected extension for download hint
         'expected_extension': 'csv',
         # A validator for the path given for the file to load
         'url_validator': validator_generator(
-            [validate_extension], 'NUGoogleDocs', [('csv', 'NUGoogleDocs')]
+            [validate_extension], 'CustomDocs', [('csv', 'CustomDocs')]
         ),
         # Input file name to move ans store
         'input_file_name': 'latest_nu.csv',
         # A validator for the data
         'validator': validator_generator(
-            [validate_unique_id], 'NUGoogleDocs', [('ID', 'NUGoogleDocs')]
+            [validate_unique_id], 'CustomDocs', [('ID', 'CustomDocs')]
         ),
         # Download instructions
         'download_instructions': 'Download as CSV!',
@@ -111,3 +110,4 @@ input_option_settings = [
     },
 ]
 
+"""
