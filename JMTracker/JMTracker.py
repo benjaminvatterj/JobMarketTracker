@@ -445,7 +445,7 @@ class Tracker():
         previous = postings.loc[postings['origin'] == origin, ['origin_id']]
         if previous.shape[0] == 0:
             logging.info(f"First time storing {origin} data, appending")
-            postings = postings.append(df, ignore_index=True)
+            postings = pd.concat([postings,df], ignore_index=True)
             postings.to_pickle(self._postings_url)
             return True, ''
 
@@ -457,7 +457,7 @@ class Tracker():
                      "==== PLEASE REVIEW ALL DEADLINES ===\n"
                      "They are quite often wrong or not available in the platforms.")
             new_postings = df.loc[new_ix, :].copy()
-            postings = postings.append(new_postings, ignore_index=True)
+            postings = pd.concat([postings,new_postings], ignore_index=True)
             postings.to_pickle(self._postings_url)
             df = df.loc[~new_ix, :].copy()
 
@@ -510,7 +510,7 @@ class Tracker():
             # In this case we just want to update whatever we have included
             updates['version'] = 0
             df['version'] = 1
-            updates = updates.append(df, ignore_index=True)
+            updates = pd.concat([updates,df], ignore_index=True)
             updates.sort_values('version', inplace=True)
             updates.drop_duplicates(['origin', 'origin_id', 'version'],
                                     inplace=True, keep='last')
