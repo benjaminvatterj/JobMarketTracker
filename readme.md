@@ -22,27 +22,52 @@ What this currently doesnt do:
 ![update listings](./static/update_overview.png)
 ![view deadlines](./static/deadlines_overview.png)
 
-## Installation
-Simply clone/download this git and execute
+## Installation (updated)
+
+1. Clone this repository to your local computer
+
+2. Install Anaconda or Miniconda
+
+3. Create a new environment by conda with Python 3.9 by running
+
 ```sh
-python ./main.py
+conda create -n jmt python=3.9
 ```
-a simple GUI should appear.
 
-This codes does have some requirements which you can install with
+4. Activate the environment
+
 ```sh
-pip install -r requirements.txt
+conda activate jmt
 ```
 
-## Known Issues
-
-If the code crashes on load, a typical issue is the libraries being out-of-date.
-Either follow the "install -r" method or run
+5. Install the required packages
 
 ```sh
+pip install -r pip-requirements.txt
+```
 
-pip install --upgrade pandas xlrd PySimpleGui humanize numpy lxml humanize beautifulsoup4 requests openpyxl
+```sh
+conda install pandas=1.3.1 numpy=1.21.1 lxml=4.6.3 openpyxl=3.0.7
+```
 
+6. Locate the repository in your terminal and run
+
+```sh
+chmod +x start.sh
+```
+
+7. Run the start.sh script
+
+```sh
+./start.sh
+```
+
+The GUI should open up.
+
+Note, you will need to register PySimpleGUI for the first time you run the script. This is a one-time operation. Then you can start the app by running
+
+```sh
+./start.sh
 ```
 
 ## Quick Start

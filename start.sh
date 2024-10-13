@@ -1,3 +1,3 @@
 #!/bin/bash
-source activate myenv
+source activate jmt
 python main.py
