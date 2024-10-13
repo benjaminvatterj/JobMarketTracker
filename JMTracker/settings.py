@@ -83,17 +83,17 @@ input_option_settings = [
         # The origin file
         'origin': 'AEA',
         # The url to link to for file download
-        'download_url': 'https://www.aeaweb.org/joe/listings?issue=2022-02',
+        'download_url': 'https://www.aeaweb.org/joe/listings?issue=2024-02',
         # Excepcted extension, lower-case no period
-        'expected_extension': 'xls',
+        'expected_extension': 'xlsx',
         # Instructions to show user
-        'download_instructions': 'download the "native XLS" file, do not modify',
+        'download_instructions': 'download the "native xlx" file, do not modify',
         # A validator for the path given for the file to load
         'url_validator': validator_generator(
-            [validate_extension], 'AEA', [('xls', 'AEA')]
+            [validate_extension], 'AEA', [('xlsx', 'AEA')]
         ),
         # name of the file to use to store the latest version in the inputs
-        'input_file_name': 'latest_aea.xls',
+        'input_file_name': 'latest_aea.xlsx',
         # input loader. A function that takes the url and returns the
         # dataframe
         'loader': corrupt_excel_reader,
