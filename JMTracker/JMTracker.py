@@ -1152,13 +1152,13 @@ class Tracker():
         return status_change
 
     def large_text_popup(self, text, title="full text", size=(800, 800),
-                         location=(None, None)):
-
-        layout = [[sg.Text(text, size=(100, None))]]
-        popup = sg.Window(title, location=location).Layout([[
-            sg.Column(layout, size=size, scrollable=True)
-        ]])
+                        location=(None, None)):
+        # Create a popup with the full text that can be copied
+        layout = [[sg.Multiline(text, size=(100, 68), disabled=True, autoscroll=True)]]
+        popup = sg.Window(title, layout, location=location, resizable=True)
         popup.read()
+        popup.close()
+
 
         return
 

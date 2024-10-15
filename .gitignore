@@ -25,3 +25,5 @@ __pycache__/
 inputs/
 output/
 storage/
+# Ignore the DS_Store file
+.DS_Store

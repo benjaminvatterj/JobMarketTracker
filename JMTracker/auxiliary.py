@@ -22,8 +22,8 @@ def corrupt_excel_reader(url):
         the loaded dataframe
 
     """
-    workbook = xlrd.open_workbook(url, ignore_workbook_corruption=True)
-    df = pd.read_excel(workbook)
+    # directly read the .xlsx file with download option of "native xls"
+    df = pd.read_excel(url, engine='openpyxl')
     return df
 
 
